@@ -6,17 +6,17 @@
 
 #include <stdbool.h>
 
-extern const bool enable_validation_layers;
-extern const char *enabled_validation_layers[];
-extern const int nenabled_validation_layers;
+// external
 
 extern VkInstance * init_vulkan();
+extern void cleanup_vulkan(VkInstance *instance);
+
+// internal
+
 extern VkInstance * create_instance();
-void cleanup_vulkan(VkInstance *instance);
-
-extern void check_extensions();
-extern bool check_validation_layers();
-
+extern const char ** get_extensions(uint32_t *pnenabled_extensions);
+extern const char ** get_layers(uint32_t *pnenabled_layers);
+extern bool has_extension(VkExtensionProperties *extensions, int nextensions, const char *extension_name);
 extern bool has_layer(VkLayerProperties *layers, int nlayers, const char *layer_name);
 
 #endif // #ifndef __VK_H__
