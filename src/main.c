@@ -1,27 +1,15 @@
-#include <stdio.h>
-
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include "window.h"
+#include "events.h"
+#include "vk.h"
 
 int main(int argc, char **argv) {
-	// Initialize GLFW window.
-	glfwInit();
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow *win = glfwCreateWindow(1024, 768, "laki", NULL, NULL);
+	GLFWwindow *win = init_window();
 
-	// Check Vulkan extensions.
-	uint32_t nextensions = 0;
-	vkEnumerateInstanceExtensionProperties(NULL, &nextensions, NULL);
-	printf("nextensions: %d\n", nextensions);
+	check_vk_extensions();
 
-	// Poll events.
-	while (!glfwWindowShouldClose(win)) {
-		glfwPollEvents();
-	}
+	event_loop(win);
 
-	// Terminate GLFW window.
-	glfwDestroyWindow(win);
-	glfwTerminate();
+	cleanup_window(win);
 
 	return 42;
 }
