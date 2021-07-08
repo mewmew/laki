@@ -15,9 +15,9 @@ const char *REQUIRED_LAYERS[] = {
 };
 const int NREQUIRED_LAYERS = sizeof(REQUIRED_LAYERS)/sizeof(char *);
 
-VkInstance * init_vulkan() {
-	VkInstance *instance = create_instance();
-	return instance;
+void init_vulkan(App *app) {
+	app->instance = create_instance();
+	app->debug_messanger = init_debug_messanger(app->instance);
 }
 
 VkInstance * create_instance() {
@@ -53,8 +53,9 @@ VkInstance * create_instance() {
 	return instance;
 }
 
-void cleanup_vulkan(VkInstance *instance) {
-	vkDestroyInstance(*instance, NULL);
+void cleanup_vulkan(App *app) {
+	DestroyDebugUtilsMessengerEXT(*(app->instance), *(app->debug_messanger), NULL);
+	vkDestroyInstance(*(app->instance), NULL);
 }
 
 const char ** get_extensions(uint32_t *pnenabled_extensions) {
@@ -152,4 +153,61 @@ bool has_layer(VkLayerProperties *layers, int nlayers, const char *layer_name) {
 		}
 	}
 	return false;
+}
+
+VkDebugUtilsMessengerEXT * init_debug_messanger(VkInstance *instance) {
+	VkDebugUtilsMessengerCreateInfoEXT create_info = {};
+	create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	create_info.pfnUserCallback = debug_callback;
+	create_info.pUserData = NULL; // optional.
+
+	VkDebugUtilsMessengerEXT *debug_messenger = calloc(1, sizeof(VkDebugUtilsMessengerEXT));
+	if (CreateDebugUtilsMessengerEXT(*instance, &create_info, NULL, debug_messenger) != VK_SUCCESS) {
+		fprintf(stderr, "unable to register debug messanger.\n");
+	}
+	return debug_messenger;
+}
+
+VkBool32 debug_callback(
+	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+	VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+	const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+	void *pUserData) {
+	if ((messageSeverity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
+		fprintf(stderr, "validation layer (error): %s\n", pCallbackData->pMessage);
+	}
+	if ((messageSeverity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) {
+		fprintf(stderr, "validation layer (warning): %s\n", pCallbackData->pMessage);
+	}
+	if ((messageSeverity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0) {
+		fprintf(stderr, "validation layer (info): %s\n", pCallbackData->pMessage);
+	}
+	if ((messageSeverity&VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0) {
+		fprintf(stderr, "validation layer (verbose): %s\n", pCallbackData->pMessage);
+	}
+	return VK_FALSE;
+}
+
+VkResult CreateDebugUtilsMessengerEXT(
+	VkInstance instance,
+	const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+	const VkAllocationCallbacks *pAllocator,
+	VkDebugUtilsMessengerEXT *pMessenger) {
+	PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+	if (func != NULL) {
+		return func(instance, pCreateInfo, pAllocator, pMessenger);
+	}
+	return VK_SUCCESS;
+}
+
+void DestroyDebugUtilsMessengerEXT(
+	VkInstance instance,
+	VkDebugUtilsMessengerEXT messenger,
+	const VkAllocationCallbacks *pAllocator) {
+	PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != NULL) {
+		func(instance, messenger, pAllocator);
+	}
 }
