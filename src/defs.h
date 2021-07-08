@@ -1,9 +1,9 @@
 #ifndef __DEFS_H__
 #define __DEFS_H__
 
-#define WINDOW_WIDTH 1024
-#define WINDOW_HEIGHT 768
+extern const int WINDOW_WIDTH;
+extern const int WINDOW_HEIGHT;
 
-#define APP_TITLE "laki"
+extern const char APP_TITLE[];
 
 #endif // #ifndef __DEFS_H__
