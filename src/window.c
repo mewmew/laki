@@ -1,8 +1,5 @@
+#include "defs.h"
 #include "window.h"
-
-const int WINDOW_WIDTH = 1024;
-const int WINDOW_HEIGHT = 768;
-const char *WINDOW_TITLE = "laki";
 
 GLFWwindow * init_window() {
 	// Initialize GLFW.
@@ -10,7 +7,7 @@ GLFWwindow * init_window() {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // skip OpenGL context.
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	// Create window.
-	GLFWwindow *win = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
+	GLFWwindow *win = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, APP_TITLE, NULL, NULL);
 	return win;
 }
 

@@ -1,9 +1,10 @@
-#include "window.h"
 #include "events.h"
 #include "vk.h"
+#include "window.h"
 
 int main(int argc, char **argv) {
 	GLFWwindow *win = init_window();
+	init_vulkan();
 
 	check_vk_extensions();
 
