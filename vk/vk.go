@@ -1,3 +1,5 @@
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Setup/Physical_devices_and_queue_families
+
 package vk
 
 // #include "app.h"

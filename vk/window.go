@@ -1,8 +1,7 @@
 package vk
 
-// #include "window.h"
-//
-//#cgo CFLAGS: -I../src
+// #define GLFW_INCLUDE_VULKAN
+// #include <GLFW/glfw3.h>
 import "C"
 
 import (
