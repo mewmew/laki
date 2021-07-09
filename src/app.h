@@ -13,4 +13,6 @@ typedef struct {
 	VkPhysicalDevice *device;
 } App;
 
+App * new_app();
+
 #endif // #ifndef __APP_H__
