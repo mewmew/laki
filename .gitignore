@@ -1,2 +1,5 @@
 *.png
 laki
+*.a
+*.o
+laki-go
