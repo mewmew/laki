@@ -8,11 +8,6 @@
 
 #include "app.h"
 
-// external
-
-extern void init_vulkan(App *app);
-extern void cleanup_vulkan(App *app);
-
 // internal
 
 extern VkInstance * create_instance();

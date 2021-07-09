@@ -15,12 +15,6 @@ const char *REQUIRED_LAYERS[] = {
 };
 const int NREQUIRED_LAYERS = sizeof(REQUIRED_LAYERS)/sizeof(char *);
 
-void init_vulkan(App *app) {
-	app->instance = create_instance();
-	app->debug_messanger = init_debug_messanger(app->instance);
-	app->device = init_device(app->instance);
-}
-
 VkInstance * create_instance() {
 	VkApplicationInfo app_info = {};
 	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -64,12 +58,6 @@ VkInstance * create_instance() {
 		exit(EXIT_FAILURE);
 	}
 	return instance;
-}
-
-void cleanup_vulkan(App *app) {
-	app->device = VK_NULL_HANDLE;
-	DestroyDebugUtilsMessengerEXT(*(app->instance), *(app->debug_messanger), NULL);
-	vkDestroyInstance(*(app->instance), NULL);
 }
 
 const char ** get_extensions(uint32_t *pnenabled_extensions) {
