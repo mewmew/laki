@@ -4,12 +4,8 @@ package vk
 // #include <GLFW/glfw3.h>
 import "C"
 
-import (
-	"fmt"
-)
-
 func InitWindow() *C.GLFWwindow {
-	fmt.Println("vk.InitWindow")
+	dbg.Println("vk.InitWindow")
 	// Initialize GLFW.
 	C.glfwInit()
 	C.glfwWindowHint(C.GLFW_CLIENT_API, C.GLFW_NO_API) // skip OpenGL context.
@@ -20,7 +16,7 @@ func InitWindow() *C.GLFWwindow {
 }
 
 func CleanupWindow(win *C.GLFWwindow) {
-	fmt.Println("vk.CleanupWindow")
+	dbg.Println("vk.CleanupWindow")
 	// Terminate window.
 	C.glfwDestroyWindow(win)
 	// Terminate GLFW.

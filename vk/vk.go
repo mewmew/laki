@@ -5,17 +5,15 @@ package vk
 // #define GLFW_INCLUDE_VULKAN
 // #include <GLFW/glfw3.h>
 //
+// #include "callback.h"
+// #include "invoke.h"
 // #include "malloc.h"
-// #include "vk.h"
 //
-//#cgo CFLAGS: -I../src
-//#cgo LDFLAGS: -llaki -L../
 //#cgo pkg-config: glfw3
 //#cgo pkg-config: vulkan
 import "C"
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -71,7 +69,11 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.instance = instance
-	app.debug_messanger = C.init_debug_messanger(app.instance)
+	debug_messanger, err := initDebugMessanger(app.instance)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.debug_messanger = debug_messanger
 	device, err := initDevice(app.instance)
 	if err != nil {
 		return errors.WithStack(err)
@@ -82,7 +84,7 @@ func InitVulkan(app *App) error {
 
 func CleanupVulkan(app *App) {
 	app.device = nil
-	C.DestroyDebugUtilsMessengerEXT(*(app.instance), *(app.debug_messanger), nil)
+	DestroyDebugUtilsMessengerEXT(*(app.instance), *(app.debug_messanger), nil)
 	C.vkDestroyInstance(*(app.instance), nil)
 }
 
@@ -98,15 +100,15 @@ func createInstance() (*C.VkInstance, error) {
 	_ = app_info
 
 	enabledExtensions := getExtensions()
-	fmt.Println("nenabledExtensions:", len(enabledExtensions))
+	dbg.Println("nenabledExtensions:", len(enabledExtensions))
 	for _, enabledExtension := range enabledExtensions {
-		fmt.Println("   enabledExtension:", enabledExtension)
+		dbg.Println("   enabledExtension:", enabledExtension)
 	}
 
 	enabledLayers := getLayers()
-	fmt.Println("nenabledLayers:", len(enabledLayers))
+	dbg.Println("nenabledLayers:", len(enabledLayers))
 	for _, enabledLayer := range enabledLayers {
-		fmt.Println("   enabledLayer:", enabledLayer)
+		dbg.Println("   enabledLayer:", enabledLayer)
 	}
 
 	create_info := C.new_VkInstanceCreateInfo()
@@ -119,7 +121,7 @@ func createInstance() (*C.VkInstance, error) {
 	create_info.ppEnabledLayerNames = getCStringSlice(enabledLayers)
 
 	debug_messanger_create_info := C.new_VkDebugUtilsMessengerCreateInfoEXT()
-	C.populate_debug_messanger_create_info(debug_messanger_create_info)
+	populateDebugMessangerCreateInfo(debug_messanger_create_info)
 	create_info.pNext = unsafe.Pointer(debug_messanger_create_info)
 
 	instance := C.new_VkInstance()
@@ -136,11 +138,11 @@ func getExtensions() []string {
 	C.vkEnumerateInstanceExtensionProperties(nil, &nextensions, nil)
 	extensions := make([]C.VkExtensionProperties, int(nextensions))
 	C.vkEnumerateInstanceExtensionProperties(nil, &nextensions, &extensions[0])
-	fmt.Println("nextensions:", len(extensions))
+	dbg.Println("nextensions:", len(extensions))
 	var extensionNames []string
 	for _, extension := range extensions {
 		extensionName := C.GoString(&extension.extensionName[0])
-		fmt.Println("   extension:", extensionName)
+		dbg.Println("   extension:", extensionName)
 		extensionNames = append(extensionNames, extensionName)
 	}
 
@@ -148,15 +150,15 @@ func getExtensions() []string {
 	var nglfw_required_extensions C.uint32_t
 	glfw_required_extensions := C.glfwGetRequiredInstanceExtensions(&nglfw_required_extensions)
 	glfwRequiredExtensions := getStringSlice(unsafe.Pointer(glfw_required_extensions), int(nglfw_required_extensions))
-	fmt.Println("nglfw_required_extensions:", len(glfwRequiredExtensions))
+	dbg.Println("nglfw_required_extensions:", len(glfwRequiredExtensions))
 	for _, glfwRequiredExtension := range glfwRequiredExtensions {
-		fmt.Println("   glfw_required_extension:", glfwRequiredExtension)
+		dbg.Println("   glfw_required_extension:", glfwRequiredExtension)
 	}
 
 	// Get required extensions by user.
-	fmt.Println("NREQUIRED_EXTENSIONS:", len(REQUIRED_EXTENSIONS))
+	dbg.Println("NREQUIRED_EXTENSIONS:", len(REQUIRED_EXTENSIONS))
 	for _, REQUIRED_EXTENSION := range REQUIRED_EXTENSIONS {
-		fmt.Println("   REQUIRED_EXTENSION:", REQUIRED_EXTENSION)
+		dbg.Println("   REQUIRED_EXTENSION:", REQUIRED_EXTENSION)
 	}
 
 	// Check required extensions.
@@ -185,20 +187,20 @@ func getLayers() []string {
 	C.vkEnumerateInstanceLayerProperties(&nlayers, nil)
 	layers := make([]C.VkLayerProperties, int(nlayers))
 	C.vkEnumerateInstanceLayerProperties(&nlayers, &layers[0])
-	fmt.Println("nlayers:", len(layers))
+	dbg.Println("nlayers:", len(layers))
 	var layerNames []string
 	for _, layer := range layers {
 		layerName := C.GoString(&layer.layerName[0])
 		layerDesc := C.GoString(&layer.description[0])
-		fmt.Println("   layer:", layerName)
-		fmt.Println("      desc:", layerDesc)
+		dbg.Println("   layer:", layerName)
+		dbg.Println("      desc:", layerDesc)
 		layerNames = append(layerNames, layerName)
 	}
 
 	// Get required layers by user.
-	fmt.Println("NREQUIRED_LAYERS:", len(REQUIRED_LAYERS))
+	dbg.Println("NREQUIRED_LAYERS:", len(REQUIRED_LAYERS))
 	for _, REQUIRED_LAYER := range REQUIRED_LAYERS {
-		fmt.Println("   REQUIRED_LAYER:", REQUIRED_LAYER)
+		dbg.Println("   REQUIRED_LAYER:", REQUIRED_LAYER)
 	}
 
 	// Check required layers.
@@ -228,7 +230,7 @@ func initDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
 	}
 	devices := make([]C.VkPhysicalDevice, int(ndevices))
 	C.vkEnumeratePhysicalDevices(*instance, &ndevices, &devices[0])
-	fmt.Println("ndevices:", len(devices))
+	dbg.Println("ndevices:", len(devices))
 	for _, device := range devices {
 		if !isSuitableDevice(&device) {
 			continue
@@ -245,7 +247,7 @@ func isSuitableDevice(device *C.VkPhysicalDevice) bool {
 	var device_properties C.VkPhysicalDeviceProperties
 	C.vkGetPhysicalDeviceProperties(*device, &device_properties)
 	deviceName := C.GoString(&device_properties.deviceName[0])
-	fmt.Println("   deviceName:", deviceName)
+	dbg.Println("   deviceName:", deviceName)
 	pretty.Println("   device_properties:", device_properties)
 
 	// Get device features.
@@ -254,6 +256,42 @@ func isSuitableDevice(device *C.VkPhysicalDevice) bool {
 	pretty.Println("   device_features:", device_features)
 
 	return true
+}
+
+func initDebugMessanger(instance *C.VkInstance) (*C.VkDebugUtilsMessengerEXT, error) {
+	debug_messanger_create_info := C.new_VkDebugUtilsMessengerCreateInfoEXT()
+	populateDebugMessangerCreateInfo(debug_messanger_create_info)
+	debug_messenger := C.new_VkDebugUtilsMessengerEXT()
+	result := CreateDebugUtilsMessengerEXT(*instance, debug_messanger_create_info, nil, debug_messenger)
+	if result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to register debug messanger (result=%d)", result)
+	}
+	return debug_messenger, nil
+}
+
+func CreateDebugUtilsMessengerEXT(instance C.VkInstance, pCreateInfo *C.VkDebugUtilsMessengerCreateInfoEXT, pAllocator *C.VkAllocationCallbacks, pMessenger *C.VkDebugUtilsMessengerEXT) C.VkResult {
+	fn := C.vkGetInstanceProcAddr(instance, C.CString("vkCreateDebugUtilsMessengerEXT"))
+	if fn == nil {
+		return C.VK_ERROR_EXTENSION_NOT_PRESENT
+	}
+	return C.invoke_CreateDebugUtilsMessengerEXT(fn, instance, pCreateInfo, pAllocator, pMessenger)
+}
+
+func DestroyDebugUtilsMessengerEXT(instance C.VkInstance, messenger C.VkDebugUtilsMessengerEXT, pAllocator *C.VkAllocationCallbacks) {
+	fn := C.vkGetInstanceProcAddr(instance, C.CString("vkDestroyDebugUtilsMessengerEXT"))
+	if fn == nil {
+		return
+	}
+	C.invoke_DestroyDebugUtilsMessengerEXT(fn, instance, messenger, pAllocator)
+}
+
+func populateDebugMessangerCreateInfo(create_info *C.VkDebugUtilsMessengerCreateInfoEXT) {
+	create_info.sType = C.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT
+	create_info.messageSeverity = C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
+	create_info.messageType = C.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+	//create_info.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debug_callback))
+	create_info.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debugCallback))
+	create_info.pUserData = nil // optional.
 }
 
 // ### [ Helper functions ] ####################################################

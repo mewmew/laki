@@ -4,13 +4,9 @@ package vk
 // #include <GLFW/glfw3.h>
 import "C"
 
-import (
-	"fmt"
-)
-
 func EventLoop(win *C.GLFWwindow) {
 	// Poll events.
-	fmt.Println("vk.EventLoop")
+	dbg.Println("vk.EventLoop")
 	for C.glfwWindowShouldClose(win) == 0 {
 		C.glfwPollEvents()
 	}

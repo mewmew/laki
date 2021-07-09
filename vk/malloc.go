@@ -19,4 +19,8 @@ package vk
 // VkDebugUtilsMessengerCreateInfoEXT * new_VkDebugUtilsMessengerCreateInfoEXT() {
 //    return calloc(1, sizeof(VkDebugUtilsMessengerCreateInfoEXT));
 // }
+//
+// VkDebugUtilsMessengerEXT * new_VkDebugUtilsMessengerEXT() {
+//    return calloc(1, sizeof(VkDebugUtilsMessengerEXT));
+// }
 import "C"

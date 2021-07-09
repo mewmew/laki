@@ -23,7 +23,6 @@ func getStringSlice(data unsafe.Pointer, n int) []string {
 	return ss
 }
 
-// data is of C type `char **`.
 func getCStringSlice(ss []string) **C.char {
 	dst := make([]*C.char, len(ss))
 	for i := range dst {
