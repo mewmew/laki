@@ -10,6 +10,7 @@ typedef struct {
 	// Vulkan.
 	VkInstance *instance;
 	VkDebugUtilsMessengerEXT *debug_messanger;
+	VkPhysicalDevice *device;
 } App;
 
 #endif // #ifndef __APP_H__
