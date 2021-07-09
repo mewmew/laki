@@ -31,9 +31,17 @@ VkInstance * create_instance() {
 
 	uint32_t nenabled_extensions = 0;
 	const char **enabled_extensions = get_extensions(&nenabled_extensions);
+	printf("nenabled_extensions: %d\n", nenabled_extensions);
+	for (int i = 0; i < nenabled_extensions; i++) {
+		printf("   enabled_extension: %s\n", enabled_extensions[i]);
+	}
 
 	uint32_t nenabled_layers = 0;
 	const char **enabled_layers = get_layers(&nenabled_layers);
+	printf("nenabled_layers: %d\n", nenabled_layers);
+	for (int i = 0; i < nenabled_layers; i++) {
+		printf("   enabled_layer: %s\n", enabled_layers[i]);
+	}
 
 	VkInstanceCreateInfo create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -43,6 +51,10 @@ VkInstance * create_instance() {
 	create_info.ppEnabledExtensionNames = enabled_extensions;
 	create_info.enabledLayerCount = nenabled_layers;
 	create_info.ppEnabledLayerNames = enabled_layers;
+
+	VkDebugUtilsMessengerCreateInfoEXT *debug_messanger_create_info = calloc(1, sizeof(VkDebugUtilsMessengerCreateInfoEXT));
+	populate_debug_messanger_create_info(debug_messanger_create_info);
+	create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)debug_messanger_create_info;
 
 	VkInstance *instance = calloc(1, sizeof(VkInstance));
 	VkResult result = vkCreateInstance(&create_info, NULL, instance);
@@ -102,6 +114,7 @@ const char ** get_extensions(uint32_t *pnenabled_extensions) {
 		nenabled_extensions++;
 	}
 
+	*pnenabled_extensions = nenabled_extensions;
 	return enabled_extensions;
 }
 
@@ -134,6 +147,7 @@ const char ** get_layers(uint32_t *pnenabled_layers) {
 		nenabled_layers++;
 	}
 
+	*pnenabled_layers = nenabled_layers;
 	return enabled_layers;
 }
 
@@ -155,17 +169,21 @@ bool has_layer(VkLayerProperties *layers, int nlayers, const char *layer_name) {
 	return false;
 }
 
-VkDebugUtilsMessengerEXT * init_debug_messanger(VkInstance *instance) {
-	VkDebugUtilsMessengerCreateInfoEXT create_info = {};
-	create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	create_info.pfnUserCallback = debug_callback;
-	create_info.pUserData = NULL; // optional.
+void populate_debug_messanger_create_info(VkDebugUtilsMessengerCreateInfoEXT *create_info) {
+	create_info->sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	create_info->messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	create_info->messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	create_info->pfnUserCallback = debug_callback;
+	create_info->pUserData = NULL; // optional.
+}
 
+VkDebugUtilsMessengerEXT * init_debug_messanger(VkInstance *instance) {
+	VkDebugUtilsMessengerCreateInfoEXT *debug_messanger_create_info = calloc(1, sizeof(VkDebugUtilsMessengerCreateInfoEXT));
+	populate_debug_messanger_create_info(debug_messanger_create_info);
 	VkDebugUtilsMessengerEXT *debug_messenger = calloc(1, sizeof(VkDebugUtilsMessengerEXT));
-	if (CreateDebugUtilsMessengerEXT(*instance, &create_info, NULL, debug_messenger) != VK_SUCCESS) {
-		fprintf(stderr, "unable to register debug messanger.\n");
+	VkResult result = CreateDebugUtilsMessengerEXT(*instance, debug_messanger_create_info, NULL, debug_messenger);
+	if (result!= VK_SUCCESS) {
+		fprintf(stderr, "unable to register debug messanger (result=%d).\n", result);
 	}
 	return debug_messenger;
 }
@@ -199,7 +217,7 @@ VkResult CreateDebugUtilsMessengerEXT(
 	if (func != NULL) {
 		return func(instance, pCreateInfo, pAllocator, pMessenger);
 	}
-	return VK_SUCCESS;
+	return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
 void DestroyDebugUtilsMessengerEXT(
