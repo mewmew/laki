@@ -13,10 +13,10 @@ import "C"
 
 func Init() {
 	app := C.new_app()
-	app.win = C.init_window()
-	defer C.cleanup_window(app.win)
+	app.win = InitWindow()
+	defer CleanupWindow(app.win)
 	C.init_vulkan(app)
 	defer C.cleanup_vulkan(app)
 
-	C.event_loop(app.win)
+	EventLoop(app.win)
 }
