@@ -228,6 +228,9 @@ func initDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
 	if ndevices == 0 {
 		return nil, errors.Errorf("unable to locate physical device (GPU)")
 	}
+	if ndevices > 1 {
+		warn.Printf("multiple (%d) physical device (GPU) located; support for ranking physical devices not yet implemented", ndevices)
+	}
 	devices := make([]C.VkPhysicalDevice, int(ndevices))
 	C.vkEnumeratePhysicalDevices(*instance, &ndevices, &devices[0])
 	dbg.Println("ndevices:", len(devices))
@@ -255,7 +258,22 @@ func isSuitableDevice(device *C.VkPhysicalDevice) bool {
 	C.vkGetPhysicalDeviceFeatures(*device, &device_features)
 	pretty.Println("   device_features:", device_features)
 
+	// Find queue which supports graphics operations.
+	queue_families := getQueueFamilies(device)
+	if !hasQueueFlag(queue_families, C.VK_QUEUE_GRAPHICS_BIT) {
+		return false
+	}
+
 	return true
+}
+
+func hasQueueFlag(queue_families []C.VkQueueFamilyProperties, queueFlags C.VkQueueFlags) bool {
+	for _, queue_family := range queue_families {
+		if queue_family.queueFlags&queueFlags == queueFlags {
+			return true
+		}
+	}
+	return false
 }
 
 func initDebugMessanger(instance *C.VkInstance) (*C.VkDebugUtilsMessengerEXT, error) {
@@ -292,6 +310,18 @@ func populateDebugMessangerCreateInfo(create_info *C.VkDebugUtilsMessengerCreate
 	//create_info.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debug_callback))
 	create_info.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debugCallback))
 	create_info.pUserData = nil // optional.
+}
+
+func getQueueFamilies(device *C.VkPhysicalDevice) []C.VkQueueFamilyProperties {
+	var nqueue_families C.uint32_t
+	C.vkGetPhysicalDeviceQueueFamilyProperties(*device, &nqueue_families, nil)
+	queue_families := make([]C.VkQueueFamilyProperties, int(nqueue_families))
+	C.vkGetPhysicalDeviceQueueFamilyProperties(*device, &nqueue_families, &queue_families[0])
+	dbg.Println("nqueue_families:", len(queue_families))
+	for _, queue_family := range queue_families {
+		pretty.Println("   queue_family:", queue_family)
+	}
+	return queue_families
 }
 
 // ### [ Helper functions ] ####################################################
