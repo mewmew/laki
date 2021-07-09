@@ -5,5 +5,6 @@
 
 extern VkInstance * new_VkInstance();
 extern VkInstanceCreateInfo * new_VkInstanceCreateInfo();
+extern VkPhysicalDevice * new_VkPhysicalDevice();
 
 #endif // #ifndef __MALLOC_H__

@@ -19,6 +19,7 @@ import (
 	"os"
 	"unsafe"
 
+	"github.com/kr/pretty"
 	"github.com/mewkiz/pkg/term"
 	"github.com/pkg/errors"
 )
@@ -69,7 +70,11 @@ func InitVulkan(app *C.App) error {
 	}
 	app.instance = instance
 	app.debug_messanger = C.init_debug_messanger(app.instance)
-	app.device = C.init_device(app.instance)
+	device, err := initDevice(app.instance)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.device = device
 	return nil
 }
 
@@ -206,6 +211,50 @@ func getLayers() []string {
 
 	return enabledLayers
 }
+
+func initDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
+	// TODO: rank physical devices by score if more than one is present. E.g.
+	// prefer dedicated graphics card with capability for larger textures.
+	//
+	// ref: https://vulkan-tutorial.com/en/Drawing_a_triangle/Setup/Physical_devices_and_queue_families#page_Base-device-suitability-checks
+
+	// Get physical devices.
+	var ndevices C.uint32_t
+	C.vkEnumeratePhysicalDevices(*instance, &ndevices, nil)
+	if ndevices == 0 {
+		return nil, errors.Errorf("unable to locate physical device (GPU)")
+	}
+	devices := make([]C.VkPhysicalDevice, int(ndevices))
+	C.vkEnumeratePhysicalDevices(*instance, &ndevices, &devices[0])
+	fmt.Println("ndevices:", len(devices))
+	for _, device := range devices {
+		if !isSuitableDevice(&device) {
+			continue
+		}
+		_device := C.new_VkPhysicalDevice()
+		*_device = device // allocate pointer on C heap.
+		return _device, nil
+	}
+	return nil, errors.Errorf("unable to locate suitable physical device (GPU)")
+}
+
+func isSuitableDevice(device *C.VkPhysicalDevice) bool {
+	// Get device properties.
+	var device_properties C.VkPhysicalDeviceProperties
+	C.vkGetPhysicalDeviceProperties(*device, &device_properties)
+	deviceName := C.GoString(&device_properties.deviceName[0])
+	fmt.Println("   deviceName:", deviceName)
+	pretty.Println("   device_properties:", device_properties)
+
+	// Get device features.
+	var device_features C.VkPhysicalDeviceFeatures
+	C.vkGetPhysicalDeviceFeatures(*device, &device_features)
+	pretty.Println("   device_features:", device_features)
+
+	return true
+}
+
+// ### [ Helper functions ] ####################################################
 
 func contains(ss []string, s string) bool {
 	for i := range ss {

@@ -11,4 +11,8 @@ package vk
 // VkInstanceCreateInfo * new_VkInstanceCreateInfo() {
 //    return calloc(1, sizeof(VkInstanceCreateInfo));
 // }
+//
+// VkPhysicalDevice * new_VkPhysicalDevice() {
+//    return calloc(1, sizeof(VkPhysicalDevice));
+// }
 import "C"

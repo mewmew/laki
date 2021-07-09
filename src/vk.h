@@ -29,7 +29,4 @@ extern void DestroyDebugUtilsMessengerEXT(
 	VkDebugUtilsMessengerEXT messenger,
 	const VkAllocationCallbacks *pAllocator);
 
-extern VkPhysicalDevice * init_device(VkInstance *instance);
-extern bool is_suitable_defice(VkPhysicalDevice *device);
-
 #endif // #ifndef __VK_H__
