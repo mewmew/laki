@@ -2,7 +2,9 @@
 
 package vk
 
-// #include "app.h"
+// #define GLFW_INCLUDE_VULKAN
+// #include <GLFW/glfw3.h>
+//
 // #include "malloc.h"
 // #include "vk.h"
 //
@@ -51,7 +53,7 @@ var REQUIRED_LAYERS = []string{
 }
 
 func Init() error {
-	app := C.new_app()
+	app := &App{}
 	app.win = InitWindow()
 	defer CleanupWindow(app.win)
 	if err := InitVulkan(app); err != nil {
@@ -63,7 +65,7 @@ func Init() error {
 	return nil
 }
 
-func InitVulkan(app *C.App) error {
+func InitVulkan(app *App) error {
 	instance, err := createInstance()
 	if err != nil {
 		return errors.WithStack(err)
@@ -78,7 +80,7 @@ func InitVulkan(app *C.App) error {
 	return nil
 }
 
-func CleanupVulkan(app *C.App) {
+func CleanupVulkan(app *App) {
 	app.device = nil
 	C.DestroyDebugUtilsMessengerEXT(*(app.instance), *(app.debug_messanger), nil)
 	C.vkDestroyInstance(*(app.instance), nil)
@@ -116,9 +118,9 @@ func createInstance() (*C.VkInstance, error) {
 	create_info.enabledLayerCount = C.uint32_t(len(enabledLayers))
 	create_info.ppEnabledLayerNames = getCStringSlice(enabledLayers)
 
-	//VkDebugUtilsMessengerCreateInfoEXT *debug_messanger_create_info = calloc(1, sizeof(VkDebugUtilsMessengerCreateInfoEXT));
-	//populate_debug_messanger_create_info(debug_messanger_create_info);
-	//create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)debug_messanger_create_info;
+	debug_messanger_create_info := C.new_VkDebugUtilsMessengerCreateInfoEXT()
+	C.populate_debug_messanger_create_info(debug_messanger_create_info)
+	create_info.pNext = unsafe.Pointer(debug_messanger_create_info)
 
 	instance := C.new_VkInstance()
 	result := C.vkCreateInstance(create_info, nil, instance)

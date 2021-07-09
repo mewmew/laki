@@ -15,4 +15,8 @@ package vk
 // VkPhysicalDevice * new_VkPhysicalDevice() {
 //    return calloc(1, sizeof(VkPhysicalDevice));
 // }
+//
+// VkDebugUtilsMessengerCreateInfoEXT * new_VkDebugUtilsMessengerCreateInfoEXT() {
+//    return calloc(1, sizeof(VkDebugUtilsMessengerCreateInfoEXT));
+// }
 import "C"

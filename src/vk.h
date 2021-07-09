@@ -4,10 +4,6 @@
 #define GLFW_INCLUDE_VULKAN // includes vulkan/vulkan.h
 #include <GLFW/glfw3.h>
 
-#include <stdbool.h>
-
-#include "app.h"
-
 // internal
 
 void populate_debug_messanger_create_info(VkDebugUtilsMessengerCreateInfoEXT *create_info);

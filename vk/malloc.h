@@ -6,5 +6,6 @@
 extern VkInstance * new_VkInstance();
 extern VkInstanceCreateInfo * new_VkInstanceCreateInfo();
 extern VkPhysicalDevice * new_VkPhysicalDevice();
+extern VkDebugUtilsMessengerCreateInfoEXT * new_VkDebugUtilsMessengerCreateInfoEXT();
 
 #endif // #ifndef __MALLOC_H__

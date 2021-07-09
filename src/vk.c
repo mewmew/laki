@@ -1,4 +1,3 @@
-#include "defs.h"
 #include "vk.h"
 
 #include <stdio.h>
