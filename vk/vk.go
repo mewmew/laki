@@ -43,12 +43,19 @@ func init() {
 // Enable debug output.
 const debug = true
 
-var REQUIRED_EXTENSIONS = []string{
-	"VK_EXT_debug_utils",
+// Extensions required by Vulkan instance.
+var RequiredInstanceExtensions = []string{
+	C.VK_EXT_DEBUG_UTILS_EXTENSION_NAME, // "VK_EXT_debug_utils"
 }
 
-var REQUIRED_LAYERS = []string{
+// Validation layers required by Vulkan instance.
+var RequiredLayers = []string{
 	"VK_LAYER_KHRONOS_validation",
+}
+
+// Extensions required by device.
+var RequiredDeviceExtensions = []string{
+	C.VK_KHR_SWAPCHAIN_EXTENSION_NAME, // "VK_KHR_swapchain"
 }
 
 func Init() error {
@@ -113,10 +120,10 @@ func createInstance() (*C.VkInstance, error) {
 		apiVersion:         C.VK_API_VERSION_1_0,
 	}
 
-	enabledExtensions := getExtensions()
-	dbg.Println("nenabledExtensions:", len(enabledExtensions))
-	for _, enabledExtension := range enabledExtensions {
-		dbg.Println("   enabledExtension:", enabledExtension)
+	enabledInstanceExtensions := getInstanceExtensions()
+	dbg.Println("nenabledInstanceExtensions:", len(enabledInstanceExtensions))
+	for _, enabledInstanceExtension := range enabledInstanceExtensions {
+		dbg.Println("   enabledInstanceExtension:", enabledInstanceExtension)
 	}
 
 	enabledLayers := getLayers()
@@ -129,8 +136,8 @@ func createInstance() (*C.VkInstance, error) {
 	createInfo.sType = C.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
 	createInfo.flags = 0 // reserved.
 	createInfo.pApplicationInfo = &appInfo
-	createInfo.enabledExtensionCount = C.uint32_t(len(enabledExtensions))
-	createInfo.ppEnabledExtensionNames = getCStringSlice(enabledExtensions)
+	createInfo.enabledExtensionCount = C.uint32_t(len(enabledInstanceExtensions))
+	createInfo.ppEnabledExtensionNames = getCStringSlice(enabledInstanceExtensions)
 	createInfo.enabledLayerCount = C.uint32_t(len(enabledLayers))
 	createInfo.ppEnabledLayerNames = getCStringSlice(enabledLayers)
 
@@ -146,53 +153,53 @@ func createInstance() (*C.VkInstance, error) {
 	return instance, nil
 }
 
-func getExtensions() []string {
-	// Get supported extensions.
-	var nextensions C.uint32_t
-	C.vkEnumerateInstanceExtensionProperties(nil, &nextensions, nil)
-	extensions := make([]C.VkExtensionProperties, int(nextensions))
-	C.vkEnumerateInstanceExtensionProperties(nil, &nextensions, &extensions[0])
-	dbg.Println("nextensions:", len(extensions))
-	var extensionNames []string
-	for _, extension := range extensions {
-		extensionName := C.GoString(&extension.extensionName[0])
-		dbg.Println("   extension:", extensionName)
-		extensionNames = append(extensionNames, extensionName)
+func getInstanceExtensions() []string {
+	// Get supported instance extensions.
+	var ninstanceExtensions C.uint32_t
+	C.vkEnumerateInstanceExtensionProperties(nil, &ninstanceExtensions, nil)
+	instanceExtensions := make([]C.VkExtensionProperties, int(ninstanceExtensions))
+	C.vkEnumerateInstanceExtensionProperties(nil, &ninstanceExtensions, &instanceExtensions[0])
+	dbg.Println("ninstanceExtensions:", len(instanceExtensions))
+	var instanceExtensionNames []string
+	for _, instanceExtension := range instanceExtensions {
+		instanceExtensionName := C.GoString(&instanceExtension.extensionName[0])
+		dbg.Println("   instanceExtension:", instanceExtensionName)
+		instanceExtensionNames = append(instanceExtensionNames, instanceExtensionName)
 	}
 
-	// Get required extensions for GLFW.
-	var nglfwRequiredExtensions C.uint32_t
-	_glfwRequiredExtensions := C.glfwGetRequiredInstanceExtensions(&nglfwRequiredExtensions)
-	glfwRequiredExtensions := getStringSlice(unsafe.Pointer(_glfwRequiredExtensions), int(nglfwRequiredExtensions))
-	dbg.Println("nglfwRequiredExtensions:", len(glfwRequiredExtensions))
-	for _, glfwRequiredExtension := range glfwRequiredExtensions {
-		dbg.Println("   glfwRequiredExtension:", glfwRequiredExtension)
+	// Get required instance extensions for GLFW.
+	var nglfwRequiredInstanceExtensions C.uint32_t
+	_glfwRequiredInstanceExtensions := C.glfwGetRequiredInstanceExtensions(&nglfwRequiredInstanceExtensions)
+	glfwRequiredInstanceExtensions := getStringSlice(unsafe.Pointer(_glfwRequiredInstanceExtensions), int(nglfwRequiredInstanceExtensions))
+	dbg.Println("nglfwRequiredInstanceExtensions:", len(glfwRequiredInstanceExtensions))
+	for _, glfwRequiredInstanceExtension := range glfwRequiredInstanceExtensions {
+		dbg.Println("   glfwRequiredInstanceExtension:", glfwRequiredInstanceExtension)
 	}
 
-	// Get required extensions by user.
-	dbg.Println("NREQUIRED_EXTENSIONS:", len(REQUIRED_EXTENSIONS))
-	for _, REQUIRED_EXTENSION := range REQUIRED_EXTENSIONS {
-		dbg.Println("   REQUIRED_EXTENSION:", REQUIRED_EXTENSION)
+	// Get required instance extensions by user.
+	dbg.Println("nrequiredInstanceExtensions:", len(RequiredInstanceExtensions))
+	for _, requiredInstanceExtension := range RequiredInstanceExtensions {
+		dbg.Println("   requiredInstanceExtension:", requiredInstanceExtension)
 	}
 
-	// Check required extensions.
-	var enabledExtensions []string
-	for _, glfwRequiredExtension := range glfwRequiredExtensions {
-		if !contains(extensionNames, glfwRequiredExtension) {
-			warn.Printf("unable to locate required extension %q", glfwRequiredExtension)
+	// Check required instance extensions.
+	var enabledInstanceExtensions []string
+	for _, glfwRequiredInstanceExtension := range glfwRequiredInstanceExtensions {
+		if !contains(instanceExtensionNames, glfwRequiredInstanceExtension) {
+			warn.Printf("unable to locate required extension %q", glfwRequiredInstanceExtension)
 			continue
 		}
-		enabledExtensions = append(enabledExtensions, glfwRequiredExtension)
+		enabledInstanceExtensions = append(enabledInstanceExtensions, glfwRequiredInstanceExtension)
 	}
-	for _, REQUIRED_EXTENSION := range REQUIRED_EXTENSIONS {
-		if !contains(extensionNames, REQUIRED_EXTENSION) {
-			warn.Printf("unable to locate required extension %q", REQUIRED_EXTENSION)
+	for _, requiredInstanceExtension := range RequiredInstanceExtensions {
+		if !contains(instanceExtensionNames, requiredInstanceExtension) {
+			warn.Printf("unable to locate required extension %q", requiredInstanceExtension)
 			continue
 		}
-		enabledExtensions = append(enabledExtensions, REQUIRED_EXTENSION)
+		enabledInstanceExtensions = append(enabledInstanceExtensions, requiredInstanceExtension)
 	}
 
-	return enabledExtensions
+	return enabledInstanceExtensions
 }
 
 func getLayers() []string {
@@ -212,22 +219,55 @@ func getLayers() []string {
 	}
 
 	// Get required layers by user.
-	dbg.Println("NREQUIRED_LAYERS:", len(REQUIRED_LAYERS))
-	for _, REQUIRED_LAYER := range REQUIRED_LAYERS {
-		dbg.Println("   REQUIRED_LAYER:", REQUIRED_LAYER)
+	dbg.Println("nrequiredLayers:", len(RequiredLayers))
+	for _, requiredLayer := range RequiredLayers {
+		dbg.Println("   requiredLayer:", requiredLayer)
 	}
 
 	// Check required layers.
 	var enabledLayers []string
-	for _, REQUIRED_LAYER := range REQUIRED_LAYERS {
-		if !contains(layerNames, REQUIRED_LAYER) {
-			warn.Printf("unable to locate required layer %q", REQUIRED_LAYER)
+	for _, requiredLayer := range RequiredLayers {
+		if !contains(layerNames, requiredLayer) {
+			warn.Printf("unable to locate required layer %q", requiredLayer)
 			continue
 		}
-		enabledLayers = append(enabledLayers, REQUIRED_LAYER)
+		enabledLayers = append(enabledLayers, requiredLayer)
 	}
 
 	return enabledLayers
+}
+
+func getDeviceExtensions(physicalDevice *C.VkPhysicalDevice) []string {
+	// Get supported device extensions.
+	var ndeviceExtensions C.uint32_t
+	C.vkEnumerateDeviceExtensionProperties(*physicalDevice, nil, &ndeviceExtensions, nil)
+	deviceExtensions := make([]C.VkExtensionProperties, int(ndeviceExtensions))
+	C.vkEnumerateDeviceExtensionProperties(*physicalDevice, nil, &ndeviceExtensions, &deviceExtensions[0])
+	dbg.Println("ndeviceExtensions:", len(deviceExtensions))
+	var deviceExtensionNames []string
+	for _, deviceExtension := range deviceExtensions {
+		deviceExtensionName := C.GoString(&deviceExtension.extensionName[0])
+		dbg.Println("   deviceExtension:", deviceExtensionName)
+		deviceExtensionNames = append(deviceExtensionNames, deviceExtensionName)
+	}
+
+	// Get required device extensions by user.
+	dbg.Println("nrequiredDeviceExtensions:", len(RequiredDeviceExtensions))
+	for _, requiredDeviceExtension := range RequiredDeviceExtensions {
+		dbg.Println("   requiredDeviceExtension:", requiredDeviceExtension)
+	}
+
+	// Check required device extensions.
+	var enabledDeviceExtensions []string
+	for _, requiredDeviceExtension := range RequiredDeviceExtensions {
+		if !contains(deviceExtensionNames, requiredDeviceExtension) {
+			warn.Printf("unable to locate required extension %q", requiredDeviceExtension)
+			continue
+		}
+		enabledDeviceExtensions = append(enabledDeviceExtensions, requiredDeviceExtension)
+	}
+
+	return enabledDeviceExtensions
 }
 
 func initPhysicalDevice(app *App) (*C.VkPhysicalDevice, error) {
@@ -285,7 +325,34 @@ func isSuitableDevice(app *App, physicalDevice *C.VkPhysicalDevice) bool {
 		return false
 	}
 
+	if !hasDeviceExtensionSupport(physicalDevice) {
+		return false
+	}
+
 	return true
+}
+
+func hasDeviceExtensionSupport(physicalDevice *C.VkPhysicalDevice) bool {
+	var ndeviceExtensions C.uint32_t
+	C.vkEnumerateDeviceExtensionProperties(*physicalDevice, nil, &ndeviceExtensions, nil)
+	deviceExtensions := make([]C.VkExtensionProperties, int(ndeviceExtensions))
+	C.vkEnumerateDeviceExtensionProperties(*physicalDevice, nil, &ndeviceExtensions, &deviceExtensions[0])
+	dbg.Println("ndeviceExtensions:", len(deviceExtensions))
+	// Check that all required device extensions are present.
+	m := make(map[string]bool)
+	for _, requiredDeviceExtension := range RequiredDeviceExtensions {
+		m[requiredDeviceExtension] = true
+	}
+	for _, deviceExtension := range deviceExtensions {
+		deviceExtensionName := C.GoString(&deviceExtension.extensionName[0])
+		dbg.Println("   deviceExtensionName:", deviceExtensionName)
+		pretty.Println("   deviceExtension:", deviceExtension)
+		delete(m, deviceExtensionName)
+	}
+	if len(m) > 1 {
+		warn.Println("   missing required device extensions", m)
+	}
+	return len(m) == 0
 }
 
 func findQueueWithFlag(queueFamilies []C.VkQueueFamilyProperties, queueFlags C.VkQueueFlags) (int, bool) {
@@ -387,14 +454,19 @@ func initDevice(app *App) (*C.VkDevice, error) {
 	enabledFeatures := C.new_VkPhysicalDeviceFeatures()
 	// TODO: enable device features here when needed.
 
+	enabledDeviceExtensions := getDeviceExtensions(app.physicalDevice)
+	dbg.Println("nenabledDeviceExtensions:", len(enabledDeviceExtensions))
+	for _, enabledDeviceExtension := range enabledDeviceExtensions {
+		dbg.Println("   enabledDeviceExtension:", enabledDeviceExtension)
+	}
+
 	createInfo := C.new_VkDeviceCreateInfo()
 	createInfo.sType = C.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
 	createInfo.queueCreateInfoCount = C.uint(len(queueCreateInfos))
 	createInfo.pQueueCreateInfos = &queueCreateInfos[0]
 	createInfo.enabledLayerCount = 0 // ignored by recent version of Vulkan.
-	//createInfo.ppEnabledLayerNames = foo
-	createInfo.enabledExtensionCount = 0 // no device specific extensions enabled for now.
-	//createInfo.ppEnabledExtensionNames = foo
+	createInfo.enabledExtensionCount = C.uint32_t(len(enabledDeviceExtensions))
+	createInfo.ppEnabledExtensionNames = getCStringSlice(enabledDeviceExtensions)
 	createInfo.pEnabledFeatures = enabledFeatures
 
 	device := C.new_VkDevice()
