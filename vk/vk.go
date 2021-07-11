@@ -92,6 +92,9 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.physicalDevice = physicalDevice
+	swapchainSupportInfo := getSwapchainSupportInfo(app, physicalDevice)
+	app.swapchainSupportInfo = swapchainSupportInfo
+	pretty.Println("   swapchainSupportInfo:", swapchainSupportInfo)
 	device, err := initDevice(app)
 	if err != nil {
 		return errors.WithStack(err)
@@ -99,10 +102,17 @@ func InitVulkan(app *App) error {
 	app.device = device
 	initQueues(app)
 	pretty.Println("app.QueueFamilyIndices:", app.QueueFamilyIndices)
+	swapchain, err := initSwapchain(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchain = swapchain
+	pretty.Println("   swapchain:", swapchain)
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	C.vkDestroySwapchainKHR(*app.device, *app.swapchain, nil)
 	C.vkDestroyDevice(*app.device, nil)
 	app.physicalDevice = nil
 	DestroyDebugUtilsMessengerEXT(*app.instance, *app.debugMessanger, nil)
@@ -289,7 +299,7 @@ func initPhysicalDevice(app *App) (*C.VkPhysicalDevice, error) {
 	C.vkEnumeratePhysicalDevices(*app.instance, &nphysicalDevices, &physicalDevices[0])
 	dbg.Println("nphysicalDevices:", len(physicalDevices))
 	for _, physicalDevice := range physicalDevices {
-		if !isSuitableDevice(app, &physicalDevice) {
+		if !isSuitablePhysicalDevice(app, &physicalDevice) {
 			continue
 		}
 		_physicalDevice := C.new_VkPhysicalDevice()
@@ -299,7 +309,7 @@ func initPhysicalDevice(app *App) (*C.VkPhysicalDevice, error) {
 	return nil, errors.Errorf("unable to locate suitable physical device (GPU)")
 }
 
-func isSuitableDevice(app *App, physicalDevice *C.VkPhysicalDevice) bool {
+func isSuitablePhysicalDevice(app *App, physicalDevice *C.VkPhysicalDevice) bool {
 	// Get device properties.
 	var deviceProperties C.VkPhysicalDeviceProperties
 	C.vkGetPhysicalDeviceProperties(*physicalDevice, &deviceProperties)
@@ -329,11 +339,11 @@ func isSuitableDevice(app *App, physicalDevice *C.VkPhysicalDevice) bool {
 		return false
 	}
 
-	swapChainSupportInfo := getSwapChainSupportInfo(app, physicalDevice)
-	if len(swapChainSupportInfo.surfaceFormats) == 0 {
+	swapchainSupportInfo := getSwapchainSupportInfo(app, physicalDevice)
+	if len(swapchainSupportInfo.surfaceFormats) == 0 {
 		return false
 	}
-	if len(swapChainSupportInfo.presentModes) == 0 {
+	if len(swapchainSupportInfo.presentModes) == 0 {
 		return false
 	}
 
@@ -447,7 +457,7 @@ func initDevice(app *App) (*C.VkDevice, error) {
 	// Create queues.
 	var queueCreateInfos []C.VkDeviceQueueCreateInfo
 	// Find unique indices.
-	queueFamilyIndices := unique(graphicsQueueFamilyIndex, presentQueueFamilyIndex)
+	queueFamilyIndices := unique(app.QueueFamilyIndices.Indices()...)
 	for _, queueFamilyIndex := range queueFamilyIndices {
 		const queueCount = 1
 		queuePriorities := [queueCount]C.float{1.0}
@@ -503,28 +513,106 @@ func initSurface(app *App) (*C.VkSurfaceKHR, error) {
 	return surface, nil
 }
 
-func getSwapChainSupportInfo(app *App, physicalDevice *C.VkPhysicalDevice) *SwapChainSupportInfo {
+func getSwapchainSupportInfo(app *App, physicalDevice *C.VkPhysicalDevice) *SwapchainSupportInfo {
 	// Get surface capabilities.
-	swapChainSupportInfo := &SwapChainSupportInfo{}
+	swapchainSupportInfo := &SwapchainSupportInfo{}
 	var surfaceCapabilities C.VkSurfaceCapabilitiesKHR
 	C.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physicalDevice, *app.surface, &surfaceCapabilities)
-	swapChainSupportInfo.surfaceCapabilities = &surfaceCapabilities
+	swapchainSupportInfo.surfaceCapabilities = &surfaceCapabilities
 
 	// Get surface formats.
 	var nsurfaceFormats C.uint32_t
 	C.vkGetPhysicalDeviceSurfaceFormatsKHR(*physicalDevice, *app.surface, &nsurfaceFormats, nil)
 	surfaceFormats := make([]C.VkSurfaceFormatKHR, int(nsurfaceFormats))
 	C.vkGetPhysicalDeviceSurfaceFormatsKHR(*physicalDevice, *app.surface, &nsurfaceFormats, &surfaceFormats[0])
-	swapChainSupportInfo.surfaceFormats = surfaceFormats
+	swapchainSupportInfo.surfaceFormats = surfaceFormats
 
 	// Get present modes.
 	var npresentModes C.uint32_t
 	C.vkGetPhysicalDeviceSurfacePresentModesKHR(*physicalDevice, *app.surface, &npresentModes, nil)
 	presentModes := make([]C.VkPresentModeKHR, int(npresentModes))
 	C.vkGetPhysicalDeviceSurfacePresentModesKHR(*physicalDevice, *app.surface, &npresentModes, &presentModes[0])
-	swapChainSupportInfo.presentModes = presentModes
+	swapchainSupportInfo.presentModes = presentModes
 
-	return swapChainSupportInfo
+	return swapchainSupportInfo
+}
+
+func chooseSwapExtent(app *App, surfaceCapabilities *C.VkSurfaceCapabilitiesKHR) C.VkExtent2D {
+	if surfaceCapabilities.currentExtent.width == C.UINT32_MAX || surfaceCapabilities.currentExtent.height == C.UINT32_MAX {
+		var width, height C.int
+		C.glfwGetFramebufferSize(app.win, &width, &height)
+		actualExtent := C.VkExtent2D{
+			width:  C.uint(clamp(int(width), int(surfaceCapabilities.minImageExtent.width), int(surfaceCapabilities.maxImageExtent.width))),
+			height: C.uint(clamp(int(height), int(surfaceCapabilities.minImageExtent.height), int(surfaceCapabilities.maxImageExtent.height))),
+		}
+		return actualExtent
+	}
+	return surfaceCapabilities.currentExtent
+}
+
+func chooseSwapSurfaceFormat(surfaceFormats []C.VkSurfaceFormatKHR) C.VkSurfaceFormatKHR {
+	for _, surfaceFormat := range surfaceFormats {
+		if surfaceFormat.format == C.VK_FORMAT_B8G8R8A8_SRGB && surfaceFormat.colorSpace == C.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR {
+			return surfaceFormat
+		}
+	}
+	return surfaceFormats[0]
+}
+
+func chooseSwapPresentMode(presentModes []C.VkPresentModeKHR) C.VkPresentModeKHR {
+	for _, presentMode := range presentModes {
+		if presentMode == C.VK_PRESENT_MODE_MAILBOX_KHR {
+			return presentMode
+		}
+	}
+	return C.VK_PRESENT_MODE_FIFO_KHR
+}
+
+func initSwapchain(app *App) (*C.VkSwapchainKHR, error) {
+	extent := chooseSwapExtent(app, app.swapchainSupportInfo.surfaceCapabilities)
+	surfaceFormat := chooseSwapSurfaceFormat(app.swapchainSupportInfo.surfaceFormats)
+	presentMode := chooseSwapPresentMode(app.swapchainSupportInfo.presentModes)
+	imageCount := app.swapchainSupportInfo.surfaceCapabilities.minImageCount
+	// Max image count of zero means unlimited max image count.
+	maxImageCount := app.swapchainSupportInfo.surfaceCapabilities.maxImageCount
+	if maxImageCount == 0 || imageCount+1 <= maxImageCount {
+		imageCount++ // use 1 image more than minimum to avoid having to wait for swap chain.
+	}
+	// Create swap chain.
+	createInfo := C.VkSwapchainCreateInfoKHR{
+		sType:            C.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		surface:          *app.surface,
+		minImageCount:    imageCount,
+		imageFormat:      surfaceFormat.format,
+		imageColorSpace:  surfaceFormat.colorSpace,
+		imageExtent:      extent,
+		imageArrayLayers: 1,
+		imageUsage:       C.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // NOTE: use VK_IMAGE_USAGE_TRANSFER_DST_BIT if rendering into separate image for post-processing, before copying result to swap chain.
+		preTransform:     app.swapchainSupportInfo.surfaceCapabilities.currentTransform,
+		compositeAlpha:   C.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		presentMode:      presentMode,
+		clipped:          C.VK_TRUE, // NOTE: set to false if we need to be able to read pixels of areas obscured by other windows.
+		oldSwapchain:     nil,
+	}
+	queueFamilyIndices := unique(app.QueueFamilyIndices.Indices()...)
+	switch len(queueFamilyIndices) {
+	case 1:
+		// exclusive mode.
+		createInfo.imageSharingMode = C.VK_SHARING_MODE_EXCLUSIVE
+		createInfo.queueFamilyIndexCount = 0 // optional
+		createInfo.pQueueFamilyIndices = nil // optional
+	default:
+		// concurrent mode.
+		createInfo.imageSharingMode = C.VK_SHARING_MODE_CONCURRENT
+		createInfo.queueFamilyIndexCount = C.uint(len(queueFamilyIndices))
+		createInfo.pQueueFamilyIndices = getCUintSlice(queueFamilyIndices)
+	}
+
+	swapchain := C.new_VkSwapchainKHR()
+	if result := C.vkCreateSwapchainKHR(*app.device, &createInfo, nil, swapchain); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create swap chain (result=%d)", result)
+	}
+	return swapchain, nil
 }
 
 // ### [ Helper functions ] ####################################################
@@ -549,4 +637,15 @@ func unique(xs ...int) []int {
 	}
 	sort.Ints(out)
 	return out
+}
+
+func clamp(v, min, max int) int {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	// min <= v && v <= max
+	return v
 }

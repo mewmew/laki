@@ -47,4 +47,8 @@ package vk
 // VkSurfaceKHR * new_VkSurfaceKHR() {
 //    return calloc(1, sizeof(VkSurfaceKHR));
 // }
+//
+// VkSwapchainKHR * new_VkSwapchainKHR() {
+//    return calloc(1, sizeof(VkSwapchainKHR));
+// }
 import "C"

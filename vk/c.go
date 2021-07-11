@@ -30,3 +30,11 @@ func getCStringSlice(ss []string) **C.char {
 	}
 	return &dst[0]
 }
+
+func getCUintSlice(xs []int) *C.uint {
+	dst := make([]C.uint, len(xs))
+	for i := range dst {
+		dst[i] = C.uint(xs[i])
+	}
+	return &dst[0]
+}

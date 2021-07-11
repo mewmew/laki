@@ -14,5 +14,6 @@ extern VkDeviceCreateInfo * new_VkDeviceCreateInfo();
 extern VkDeviceQueueCreateInfo * new_VkDeviceQueueCreateInfo();
 extern VkQueue * new_VkQueue();
 extern VkSurfaceKHR * new_VkSurfaceKHR();
+extern VkSwapchainKHR * new_VkSwapchainKHR();
 
 #endif // #ifndef __MALLOC_H__
