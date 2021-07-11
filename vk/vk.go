@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Shader_modules
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Fixed_functions
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -675,19 +675,45 @@ func initSwapchainImgViews(app *App) ([]C.VkImageView, error) {
 }
 
 func initGraphicsPipeline(app *App) error {
+	shaderStageCreateInfos, err := initShaderModules(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	_ = shaderStageCreateInfos
+	return nil
+}
+
+func initShaderModules(app *App) ([]C.VkPipelineShaderStageCreateInfo, error) {
 	// Create vertex shader.
 	vertexShaderModule, err := createShaderModule(app, "shaders/shader_vert.spv")
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	app.vertexShaderModule = vertexShaderModule
 	// Create fragment shader.
 	fragmentShaderModule, err := createShaderModule(app, "shaders/shader_frag.spv")
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	app.fragmentShaderModule = fragmentShaderModule
-	return nil
+	// Create graphics pipeline.
+	vertexShaderStageInfo := C.VkPipelineShaderStageCreateInfo{
+		sType:  C.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		stage:  C.VK_SHADER_STAGE_VERTEX_BIT,
+		module: *app.vertexShaderModule,
+		pName:  C.CString("main"),
+	}
+	fragmentShaderStageInfo := C.VkPipelineShaderStageCreateInfo{
+		sType:  C.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		stage:  C.VK_SHADER_STAGE_FRAGMENT_BIT,
+		module: *app.fragmentShaderModule,
+		pName:  C.CString("main"),
+	}
+	shaderStageCreateInfos := []C.VkPipelineShaderStageCreateInfo{
+		vertexShaderStageInfo,
+		fragmentShaderStageInfo,
+	}
+	return shaderStageCreateInfos, nil
 }
 
 func createShaderModule(app *App, shaderPath string) (*C.VkShaderModule, error) {
