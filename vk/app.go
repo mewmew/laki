@@ -21,6 +21,7 @@ type App struct {
 	swapchainImageFormat C.VkFormat
 	swapchainExtent      C.VkExtent2D
 	swapchainImgs        []C.VkImage
+	swapchainImgViews    []C.VkImageView
 }
 
 func newApp() *App {

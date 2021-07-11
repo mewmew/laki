@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Swap_chain
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
 
 package vk
 
@@ -109,10 +109,18 @@ func InitVulkan(app *App) error {
 	app.swapchain = swapchain
 	pretty.Println("   swapchain:", swapchain)
 	app.swapchainImgs = getSwapchainImgs(app)
+	swapchainImgViews, err := initSwapchainImgViews(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainImgViews = swapchainImgViews
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	for i := range app.swapchainImgViews {
+		C.vkDestroyImageView(*app.device, app.swapchainImgViews[i], nil)
+	}
 	C.vkDestroySwapchainKHR(*app.device, *app.swapchain, nil)
 	C.vkDestroyDevice(*app.device, nil)
 	app.physicalDevice = nil
@@ -627,6 +635,35 @@ func getSwapchainImgs(app *App) []C.VkImage {
 	swapchainImgs := make([]C.VkImage, int(nswapchainImgs))
 	C.vkGetSwapchainImagesKHR(*app.device, *app.swapchain, &nswapchainImgs, &swapchainImgs[0])
 	return swapchainImgs
+}
+
+func initSwapchainImgViews(app *App) ([]C.VkImageView, error) {
+	swapchainImgViews := make([]C.VkImageView, len(app.swapchainImgs))
+	for i := range swapchainImgViews {
+		createInfo := C.VkImageViewCreateInfo{
+			sType:    C.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			image:    app.swapchainImgs[i],
+			viewType: C.VK_IMAGE_VIEW_TYPE_2D,
+			format:   app.swapchainImageFormat,
+			components: C.VkComponentMapping{
+				r: C.VK_COMPONENT_SWIZZLE_IDENTITY,
+				g: C.VK_COMPONENT_SWIZZLE_IDENTITY,
+				b: C.VK_COMPONENT_SWIZZLE_IDENTITY,
+				a: C.VK_COMPONENT_SWIZZLE_IDENTITY,
+			},
+			subresourceRange: C.VkImageSubresourceRange{
+				aspectMask:     C.VK_IMAGE_ASPECT_COLOR_BIT,
+				baseMipLevel:   0,
+				levelCount:     1,
+				baseArrayLayer: 0,
+				layerCount:     1,
+			},
+		}
+		if result := C.vkCreateImageView(*app.device, &createInfo, nil, &swapchainImgViews[i]); result != C.VK_SUCCESS {
+			return nil, errors.Errorf("unable to create image view of swap chain image (result=%d)", result)
+		}
+	}
+	return swapchainImgViews, nil
 }
 
 // ### [ Helper functions ] ####################################################
