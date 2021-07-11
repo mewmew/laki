@@ -16,6 +16,7 @@ type App struct {
 	presentQueue   *C.VkQueue
 	surface        *C.VkSurfaceKHR
 	*QueueFamilyIndices
+	swapChainSupportInfo *SwapChainSupportInfo
 }
 
 func newApp() *App {
@@ -34,4 +35,10 @@ func newQueueFamilyIndices() *QueueFamilyIndices {
 		graphicsQueueFamilyIndex: -1,
 		presentQueueFamilyIndex:  -1,
 	}
+}
+
+type SwapChainSupportInfo struct {
+	surfaceCapabilities *C.VkSurfaceCapabilitiesKHR
+	surfaceFormats      []C.VkSurfaceFormatKHR
+	presentModes        []C.VkPresentModeKHR
 }

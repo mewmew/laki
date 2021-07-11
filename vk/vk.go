@@ -329,6 +329,14 @@ func isSuitableDevice(app *App, physicalDevice *C.VkPhysicalDevice) bool {
 		return false
 	}
 
+	swapChainSupportInfo := getSwapChainSupportInfo(app, physicalDevice)
+	if len(swapChainSupportInfo.surfaceFormats) == 0 {
+		return false
+	}
+	if len(swapChainSupportInfo.presentModes) == 0 {
+		return false
+	}
+
 	return true
 }
 
@@ -493,6 +501,30 @@ func initSurface(app *App) (*C.VkSurfaceKHR, error) {
 		return nil, errors.Errorf("unable to create window surface (result=%d)", result)
 	}
 	return surface, nil
+}
+
+func getSwapChainSupportInfo(app *App, physicalDevice *C.VkPhysicalDevice) *SwapChainSupportInfo {
+	// Get surface capabilities.
+	swapChainSupportInfo := &SwapChainSupportInfo{}
+	var surfaceCapabilities C.VkSurfaceCapabilitiesKHR
+	C.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physicalDevice, *app.surface, &surfaceCapabilities)
+	swapChainSupportInfo.surfaceCapabilities = &surfaceCapabilities
+
+	// Get surface formats.
+	var nsurfaceFormats C.uint32_t
+	C.vkGetPhysicalDeviceSurfaceFormatsKHR(*physicalDevice, *app.surface, &nsurfaceFormats, nil)
+	surfaceFormats := make([]C.VkSurfaceFormatKHR, int(nsurfaceFormats))
+	C.vkGetPhysicalDeviceSurfaceFormatsKHR(*physicalDevice, *app.surface, &nsurfaceFormats, &surfaceFormats[0])
+	swapChainSupportInfo.surfaceFormats = surfaceFormats
+
+	// Get present modes.
+	var npresentModes C.uint32_t
+	C.vkGetPhysicalDeviceSurfacePresentModesKHR(*physicalDevice, *app.surface, &npresentModes, nil)
+	presentModes := make([]C.VkPresentModeKHR, int(npresentModes))
+	C.vkGetPhysicalDeviceSurfacePresentModesKHR(*physicalDevice, *app.surface, &npresentModes, &presentModes[0])
+	swapChainSupportInfo.presentModes = presentModes
+
+	return swapChainSupportInfo
 }
 
 // ### [ Helper functions ] ####################################################
