@@ -108,6 +108,7 @@ func InitVulkan(app *App) error {
 	}
 	app.swapchain = swapchain
 	pretty.Println("   swapchain:", swapchain)
+	app.swapchainImgs = getSwapchainImgs(app)
 	return nil
 }
 
@@ -612,7 +613,20 @@ func initSwapchain(app *App) (*C.VkSwapchainKHR, error) {
 	if result := C.vkCreateSwapchainKHR(*app.device, &createInfo, nil, swapchain); result != C.VK_SUCCESS {
 		return nil, errors.Errorf("unable to create swap chain (result=%d)", result)
 	}
+
+	// Store swap chain image format and extent.
+	app.swapchainImageFormat = surfaceFormat.format
+	app.swapchainExtent = extent
+
 	return swapchain, nil
+}
+
+func getSwapchainImgs(app *App) []C.VkImage {
+	var nswapchainImgs C.uint32_t
+	C.vkGetSwapchainImagesKHR(*app.device, *app.swapchain, &nswapchainImgs, nil)
+	swapchainImgs := make([]C.VkImage, int(nswapchainImgs))
+	C.vkGetSwapchainImagesKHR(*app.device, *app.swapchain, &nswapchainImgs, &swapchainImgs[0])
+	return swapchainImgs
 }
 
 // ### [ Helper functions ] ####################################################

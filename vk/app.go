@@ -18,6 +18,9 @@ type App struct {
 	*QueueFamilyIndices
 	swapchainSupportInfo *SwapchainSupportInfo
 	swapchain            *C.VkSwapchainKHR
+	swapchainImageFormat C.VkFormat
+	swapchainExtent      C.VkExtent2D
+	swapchainImgs        []C.VkImage
 }
 
 func newApp() *App {
