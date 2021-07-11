@@ -12,5 +12,6 @@ extern VkDevice * new_VkDevice();
 extern VkPhysicalDeviceFeatures * new_VkPhysicalDeviceFeatures();
 extern VkDeviceCreateInfo * new_VkDeviceCreateInfo();
 extern VkDeviceQueueCreateInfo * new_VkDeviceQueueCreateInfo();
+extern VkQueue * new_VkQueue();
 
 #endif // #ifndef __MALLOC_H__

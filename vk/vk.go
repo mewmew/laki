@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Setup/Logical_device_and_queues
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Window_surface
 
 package vk
 
@@ -357,6 +357,11 @@ func initDevice(app *App) (*C.VkDevice, error) {
 	if result := C.vkCreateDevice(*app.physicalDevice, createInfo, nil, device); result != C.VK_SUCCESS {
 		return nil, errors.Errorf("unable to create device (result=%d)", result)
 	}
+
+	graphicsQueue := C.new_VkQueue()
+	C.vkGetDeviceQueue(*device, C.uint(queueFamilyIndex), 0, graphicsQueue)
+	app.graphicsQueue = graphicsQueue
+
 	return device, nil
 }
 

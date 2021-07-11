@@ -39,4 +39,8 @@ package vk
 // VkDeviceQueueCreateInfo * new_VkDeviceQueueCreateInfo() {
 //    return calloc(1, sizeof(VkDeviceQueueCreateInfo));
 // }
+//
+// VkQueue * new_VkQueue() {
+//    return calloc(1, sizeof(VkQueue));
+// }
 import "C"

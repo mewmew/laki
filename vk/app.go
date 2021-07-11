@@ -12,4 +12,5 @@ type App struct {
 	debugMessanger *C.VkDebugUtilsMessengerEXT
 	physicalDevice *C.VkPhysicalDevice
 	device         *C.VkDevice
+	graphicsQueue  *C.VkQueue
 }
