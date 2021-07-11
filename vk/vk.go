@@ -1,4 +1,7 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Shader_modules
+
+// refs:
+// * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
 
 package vk
 
@@ -114,10 +117,15 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.swapchainImgViews = swapchainImgViews
+	if err := initGraphicsPipeline(app); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	C.vkDestroyShaderModule(*app.device, *app.fragmentShaderModule, nil)
+	C.vkDestroyShaderModule(*app.device, *app.vertexShaderModule, nil)
 	for i := range app.swapchainImgViews {
 		C.vkDestroyImageView(*app.device, app.swapchainImgViews[i], nil)
 	}
@@ -664,6 +672,40 @@ func initSwapchainImgViews(app *App) ([]C.VkImageView, error) {
 		}
 	}
 	return swapchainImgViews, nil
+}
+
+func initGraphicsPipeline(app *App) error {
+	// Create vertex shader.
+	vertexShaderModule, err := createShaderModule(app, "shaders/shader_vert.spv")
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.vertexShaderModule = vertexShaderModule
+	// Create fragment shader.
+	fragmentShaderModule, err := createShaderModule(app, "shaders/shader_frag.spv")
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.fragmentShaderModule = fragmentShaderModule
+	return nil
+}
+
+func createShaderModule(app *App, shaderPath string) (*C.VkShaderModule, error) {
+	dbg.Printf("loading shader %q", shaderPath)
+	shaderData, err := ioutil.ReadFile(shaderPath)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	createInfo := C.VkShaderModuleCreateInfo{
+		sType:    C.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		codeSize: C.size_t(len(shaderData)),
+		pCode:    getCUintSliceFromBytes(shaderData),
+	}
+	shaderModule := C.new_VkShaderModule()
+	if result := C.vkCreateShaderModule(*app.device, &createInfo, nil, shaderModule); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create shader module %q (result=%d)", shaderPath, result)
+	}
+	return shaderModule, nil
 }
 
 // ### [ Helper functions ] ####################################################

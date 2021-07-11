@@ -22,6 +22,9 @@ type App struct {
 	swapchainExtent      C.VkExtent2D
 	swapchainImgs        []C.VkImage
 	swapchainImgViews    []C.VkImageView
+	// Shaders.
+	vertexShaderModule   *C.VkShaderModule
+	fragmentShaderModule *C.VkShaderModule
 }
 
 func newApp() *App {

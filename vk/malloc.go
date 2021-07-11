@@ -51,4 +51,8 @@ package vk
 // VkSwapchainKHR * new_VkSwapchainKHR() {
 //    return calloc(1, sizeof(VkSwapchainKHR));
 // }
+//
+// VkShaderModule * new_VkShaderModule() {
+//    return calloc(1, sizeof(VkShaderModule));
+// }
 import "C"

@@ -1,5 +1,7 @@
 package vk
 
+// #include <stdint.h>
+// #include <stdlib.h>
 import "C"
 
 import (
@@ -37,4 +39,21 @@ func getCUintSlice(xs []int) *C.uint {
 		dst[i] = C.uint(xs[i])
 	}
 	return &dst[0]
+}
+
+func getCUintSliceFromBytes(buf []byte) *C.uint32_t {
+	// Allocate 4-byte aligned buffer in C.
+	n := len(buf)
+	if n%4 != 0 {
+		n += 4 - n%4
+	}
+	_buf := C.calloc(C.size_t(n), 1)
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(_buf)),
+		Len:  len(buf),
+		Cap:  len(buf),
+	}
+	slice := *(*[]byte)(unsafe.Pointer(&sh))
+	copy(slice, buf)
+	return (*C.uint32_t)(unsafe.Pointer(&slice[0]))
 }
