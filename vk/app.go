@@ -13,4 +13,25 @@ type App struct {
 	physicalDevice *C.VkPhysicalDevice
 	device         *C.VkDevice
 	graphicsQueue  *C.VkQueue
+	presentQueue   *C.VkQueue
+	surface        *C.VkSurfaceKHR
+	*QueueFamilyIndices
+}
+
+func newApp() *App {
+	return &App{
+		QueueFamilyIndices: newQueueFamilyIndices(),
+	}
+}
+
+type QueueFamilyIndices struct {
+	graphicsQueueFamilyIndex int
+	presentQueueFamilyIndex  int
+}
+
+func newQueueFamilyIndices() *QueueFamilyIndices {
+	return &QueueFamilyIndices{
+		graphicsQueueFamilyIndex: -1,
+		presentQueueFamilyIndex:  -1,
+	}
 }

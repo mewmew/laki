@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Window_surface
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Swap_chain
 
 package vk
 
@@ -17,6 +17,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"unsafe"
 
 	"github.com/kr/pretty"
@@ -51,7 +52,7 @@ var REQUIRED_LAYERS = []string{
 }
 
 func Init() error {
-	app := &App{}
+	app := newApp()
 	app.win = InitWindow()
 	defer CleanupWindow(app.win)
 	if err := InitVulkan(app); err != nil {
@@ -74,7 +75,12 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.debugMessanger = debugMessanger
-	physicalDevice, err := initPhysicalDevice(app.instance)
+	surface, err := initSurface(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.surface = surface
+	physicalDevice, err := initPhysicalDevice(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -84,14 +90,17 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.device = device
+	initQueues(app)
+	pretty.Println("app.QueueFamilyIndices:", app.QueueFamilyIndices)
 	return nil
 }
 
 func CleanupVulkan(app *App) {
 	C.vkDestroyDevice(*app.device, nil)
 	app.physicalDevice = nil
-	DestroyDebugUtilsMessengerEXT(*(app.instance), *(app.debugMessanger), nil)
-	C.vkDestroyInstance(*(app.instance), nil)
+	DestroyDebugUtilsMessengerEXT(*app.instance, *app.debugMessanger, nil)
+	C.vkDestroySurfaceKHR(*app.instance, *app.surface, nil)
+	C.vkDestroyInstance(*app.instance, nil)
 }
 
 func createInstance() (*C.VkInstance, error) {
@@ -221,7 +230,7 @@ func getLayers() []string {
 	return enabledLayers
 }
 
-func initPhysicalDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
+func initPhysicalDevice(app *App) (*C.VkPhysicalDevice, error) {
 	// TODO: rank physical devices by score if more than one is present. E.g.
 	// prefer dedicated graphics card with capability for larger textures.
 	//
@@ -229,7 +238,7 @@ func initPhysicalDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
 
 	// Get physical devices.
 	var nphysicalDevices C.uint32_t
-	C.vkEnumeratePhysicalDevices(*instance, &nphysicalDevices, nil)
+	C.vkEnumeratePhysicalDevices(*app.instance, &nphysicalDevices, nil)
 	if nphysicalDevices == 0 {
 		return nil, errors.Errorf("unable to locate physical device (GPU)")
 	}
@@ -237,10 +246,10 @@ func initPhysicalDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
 		warn.Printf("multiple (%d) physical device (GPU) located; support for ranking physical devices not yet implemented", nphysicalDevices)
 	}
 	physicalDevices := make([]C.VkPhysicalDevice, int(nphysicalDevices))
-	C.vkEnumeratePhysicalDevices(*instance, &nphysicalDevices, &physicalDevices[0])
+	C.vkEnumeratePhysicalDevices(*app.instance, &nphysicalDevices, &physicalDevices[0])
 	dbg.Println("nphysicalDevices:", len(physicalDevices))
 	for _, physicalDevice := range physicalDevices {
-		if !isSuitableDevice(&physicalDevice) {
+		if !isSuitableDevice(app, &physicalDevice) {
 			continue
 		}
 		_physicalDevice := C.new_VkPhysicalDevice()
@@ -250,7 +259,7 @@ func initPhysicalDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
 	return nil, errors.Errorf("unable to locate suitable physical device (GPU)")
 }
 
-func isSuitableDevice(physicalDevice *C.VkPhysicalDevice) bool {
+func isSuitableDevice(app *App, physicalDevice *C.VkPhysicalDevice) bool {
 	// Get device properties.
 	var deviceProperties C.VkPhysicalDeviceProperties
 	C.vkGetPhysicalDeviceProperties(*physicalDevice, &deviceProperties)
@@ -272,6 +281,9 @@ func isSuitableDevice(physicalDevice *C.VkPhysicalDevice) bool {
 	if _, ok := findQueueWithFlag(queueFamilies, C.VK_QUEUE_GRAPHICS_BIT); !ok {
 		return false
 	}
+	if _, ok := findQueueWithPresentSupport(physicalDevice, app.surface, queueFamilies); !ok {
+		return false
+	}
 
 	return true
 }
@@ -279,6 +291,17 @@ func isSuitableDevice(physicalDevice *C.VkPhysicalDevice) bool {
 func findQueueWithFlag(queueFamilies []C.VkQueueFamilyProperties, queueFlags C.VkQueueFlags) (int, bool) {
 	for queueFamilyIndex, queueFamily := range queueFamilies {
 		if queueFamily.queueFlags&queueFlags == queueFlags {
+			return queueFamilyIndex, true
+		}
+	}
+	return 0, false
+}
+
+func findQueueWithPresentSupport(physicalDevice *C.VkPhysicalDevice, surface *C.VkSurfaceKHR, queueFamilies []C.VkQueueFamilyProperties) (int, bool) {
+	for queueFamilyIndex := range queueFamilies {
+		var presentSupport C.VkBool32
+		C.vkGetPhysicalDeviceSurfaceSupportKHR(*physicalDevice, C.uint(queueFamilyIndex), *surface, &presentSupport)
+		if presentSupport == C.VK_TRUE {
 			return queueFamilyIndex, true
 		}
 	}
@@ -331,38 +354,73 @@ func getQueueFamilies(device *C.VkPhysicalDevice) []C.VkQueueFamilyProperties {
 
 func initDevice(app *App) (*C.VkDevice, error) {
 	queueFamilies := getQueueFamilies(app.physicalDevice)
-	queueFamilyIndex, ok := findQueueWithFlag(queueFamilies, C.VK_QUEUE_GRAPHICS_BIT)
+
+	// Graphics queue.
+	graphicsQueueFamilyIndex, ok := findQueueWithFlag(queueFamilies, C.VK_QUEUE_GRAPHICS_BIT)
 	if !ok {
 		return nil, errors.Errorf("unable to locate queue family with support for graphics operations")
 	}
-	const queueCount = 1
-	var queuePriorities [queueCount]C.float
-	queueCreateInfo := C.new_VkDeviceQueueCreateInfo()
-	queueCreateInfo.sType = C.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
-	queueCreateInfo.queueFamilyIndex = C.uint(queueFamilyIndex)
-	queueCreateInfo.queueCount = queueCount
-	queueCreateInfo.pQueuePriorities = &queuePriorities[0]
+	app.graphicsQueueFamilyIndex = graphicsQueueFamilyIndex
+
+	// Present queue.
+	presentQueueFamilyIndex, ok := findQueueWithPresentSupport(app.physicalDevice, app.surface, queueFamilies)
+	if !ok {
+		return nil, errors.Errorf("unable to locate queue family with support for present operations")
+	}
+	app.presentQueueFamilyIndex = presentQueueFamilyIndex
+
+	// Create queues.
+	var queueCreateInfos []C.VkDeviceQueueCreateInfo
+	// Find unique indices.
+	queueFamilyIndices := unique(graphicsQueueFamilyIndex, presentQueueFamilyIndex)
+	for _, queueFamilyIndex := range queueFamilyIndices {
+		const queueCount = 1
+		queuePriorities := [queueCount]C.float{1.0}
+		queueCreateInfo := C.new_VkDeviceQueueCreateInfo()
+		queueCreateInfo.sType = C.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
+		queueCreateInfo.queueFamilyIndex = C.uint(queueFamilyIndex)
+		queueCreateInfo.queueCount = queueCount
+		queueCreateInfo.pQueuePriorities = &queuePriorities[0]
+		queueCreateInfos = append(queueCreateInfos, *queueCreateInfo)
+	}
+
 	enabledFeatures := C.new_VkPhysicalDeviceFeatures()
 	// TODO: enable device features here when needed.
+
 	createInfo := C.new_VkDeviceCreateInfo()
 	createInfo.sType = C.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
-	createInfo.queueCreateInfoCount = queueCount
-	createInfo.pQueueCreateInfos = queueCreateInfo
+	createInfo.queueCreateInfoCount = C.uint(len(queueCreateInfos))
+	createInfo.pQueueCreateInfos = &queueCreateInfos[0]
 	createInfo.enabledLayerCount = 0 // ignored by recent version of Vulkan.
 	//createInfo.ppEnabledLayerNames = foo
 	createInfo.enabledExtensionCount = 0 // no device specific extensions enabled for now.
 	//createInfo.ppEnabledExtensionNames = foo
 	createInfo.pEnabledFeatures = enabledFeatures
+
 	device := C.new_VkDevice()
 	if result := C.vkCreateDevice(*app.physicalDevice, createInfo, nil, device); result != C.VK_SUCCESS {
 		return nil, errors.Errorf("unable to create device (result=%d)", result)
 	}
-
-	graphicsQueue := C.new_VkQueue()
-	C.vkGetDeviceQueue(*device, C.uint(queueFamilyIndex), 0, graphicsQueue)
-	app.graphicsQueue = graphicsQueue
-
 	return device, nil
+}
+
+func initQueues(app *App) {
+	// Graphics queue.
+	graphicsQueue := C.new_VkQueue()
+	C.vkGetDeviceQueue(*app.device, C.uint(app.graphicsQueueFamilyIndex), 0, graphicsQueue)
+	app.graphicsQueue = graphicsQueue
+	// Present queue.
+	presentQueue := C.new_VkQueue()
+	C.vkGetDeviceQueue(*app.device, C.uint(app.presentQueueFamilyIndex), 0, presentQueue)
+	app.presentQueue = presentQueue
+}
+
+func initSurface(app *App) (*C.VkSurfaceKHR, error) {
+	surface := C.new_VkSurfaceKHR()
+	if result := C.glfwCreateWindowSurface(*app.instance, app.win, nil, surface); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create window surface (result=%d)", result)
+	}
+	return surface, nil
 }
 
 // ### [ Helper functions ] ####################################################
@@ -374,4 +432,17 @@ func contains(ss []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func unique(xs ...int) []int {
+	m := make(map[int]bool)
+	for _, x := range xs {
+		m[x] = true
+	}
+	var out []int
+	for x := range m {
+		out = append(out, x)
+	}
+	sort.Ints(out)
+	return out
 }

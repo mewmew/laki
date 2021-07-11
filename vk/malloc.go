@@ -43,4 +43,8 @@ package vk
 // VkQueue * new_VkQueue() {
 //    return calloc(1, sizeof(VkQueue));
 // }
+//
+// VkSurfaceKHR * new_VkSurfaceKHR() {
+//    return calloc(1, sizeof(VkSurfaceKHR));
+// }
 import "C"
