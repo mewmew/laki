@@ -8,7 +8,8 @@ type App struct {
 	// GLFW.
 	win *C.GLFWwindow
 	// Vulkan.
-	instance        *C.VkInstance
-	debug_messanger *C.VkDebugUtilsMessengerEXT
-	device          *C.VkPhysicalDevice
+	instance       *C.VkInstance
+	debugMessanger *C.VkDebugUtilsMessengerEXT
+	physicalDevice *C.VkPhysicalDevice
+	device         *C.VkDevice
 }

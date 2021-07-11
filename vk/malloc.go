@@ -23,4 +23,20 @@ package vk
 // VkDebugUtilsMessengerEXT * new_VkDebugUtilsMessengerEXT() {
 //    return calloc(1, sizeof(VkDebugUtilsMessengerEXT));
 // }
+//
+// VkDevice * new_VkDevice() {
+//    return calloc(1, sizeof(VkDevice));
+// }
+//
+// VkPhysicalDeviceFeatures * new_VkPhysicalDeviceFeatures() {
+//    return calloc(1, sizeof(VkPhysicalDeviceFeatures));
+// }
+//
+// VkDeviceCreateInfo * new_VkDeviceCreateInfo() {
+//    return calloc(1, sizeof(VkDeviceCreateInfo));
+// }
+//
+// VkDeviceQueueCreateInfo * new_VkDeviceQueueCreateInfo() {
+//    return calloc(1, sizeof(VkDeviceQueueCreateInfo));
+// }
 import "C"

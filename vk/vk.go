@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Setup/Physical_devices_and_queue_families
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Setup/Logical_device_and_queues
 
 package vk
 
@@ -69,12 +69,17 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.instance = instance
-	debug_messanger, err := initDebugMessanger(app.instance)
+	debugMessanger, err := initDebugMessanger(app.instance)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	app.debug_messanger = debug_messanger
-	device, err := initDevice(app.instance)
+	app.debugMessanger = debugMessanger
+	physicalDevice, err := initPhysicalDevice(app.instance)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.physicalDevice = physicalDevice
+	device, err := initDevice(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -83,13 +88,14 @@ func InitVulkan(app *App) error {
 }
 
 func CleanupVulkan(app *App) {
-	app.device = nil
-	DestroyDebugUtilsMessengerEXT(*(app.instance), *(app.debug_messanger), nil)
+	C.vkDestroyDevice(*app.device, nil)
+	app.physicalDevice = nil
+	DestroyDebugUtilsMessengerEXT(*(app.instance), *(app.debugMessanger), nil)
 	C.vkDestroyInstance(*(app.instance), nil)
 }
 
 func createInstance() (*C.VkInstance, error) {
-	app_info := C.VkApplicationInfo{
+	appInfo := C.VkApplicationInfo{
 		sType:              C.VK_STRUCTURE_TYPE_APPLICATION_INFO,
 		pApplicationName:   C.CString(AppTitle),
 		applicationVersion: VK_MAKE_API_VERSION(0, 1, 0, 0),
@@ -97,7 +103,6 @@ func createInstance() (*C.VkInstance, error) {
 		engineVersion:      VK_MAKE_API_VERSION(0, 1, 0, 0),
 		apiVersion:         C.VK_API_VERSION_1_0,
 	}
-	_ = app_info
 
 	enabledExtensions := getExtensions()
 	dbg.Println("nenabledExtensions:", len(enabledExtensions))
@@ -111,21 +116,21 @@ func createInstance() (*C.VkInstance, error) {
 		dbg.Println("   enabledLayer:", enabledLayer)
 	}
 
-	create_info := C.new_VkInstanceCreateInfo()
-	create_info.sType = C.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
-	create_info.flags = 0 // reserved.
-	create_info.pApplicationInfo = &app_info
-	create_info.enabledExtensionCount = C.uint32_t(len(enabledExtensions))
-	create_info.ppEnabledExtensionNames = getCStringSlice(enabledExtensions)
-	create_info.enabledLayerCount = C.uint32_t(len(enabledLayers))
-	create_info.ppEnabledLayerNames = getCStringSlice(enabledLayers)
+	createInfo := C.new_VkInstanceCreateInfo()
+	createInfo.sType = C.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
+	createInfo.flags = 0 // reserved.
+	createInfo.pApplicationInfo = &appInfo
+	createInfo.enabledExtensionCount = C.uint32_t(len(enabledExtensions))
+	createInfo.ppEnabledExtensionNames = getCStringSlice(enabledExtensions)
+	createInfo.enabledLayerCount = C.uint32_t(len(enabledLayers))
+	createInfo.ppEnabledLayerNames = getCStringSlice(enabledLayers)
 
-	debug_messanger_create_info := C.new_VkDebugUtilsMessengerCreateInfoEXT()
-	populateDebugMessangerCreateInfo(debug_messanger_create_info)
-	create_info.pNext = unsafe.Pointer(debug_messanger_create_info)
+	debugMessangerCreateInfo := C.new_VkDebugUtilsMessengerCreateInfoEXT()
+	populateDebugMessangerCreateInfo(debugMessangerCreateInfo)
+	createInfo.pNext = unsafe.Pointer(debugMessangerCreateInfo)
 
 	instance := C.new_VkInstance()
-	result := C.vkCreateInstance(create_info, nil, instance)
+	result := C.vkCreateInstance(createInfo, nil, instance)
 	if result != C.VK_SUCCESS {
 		return nil, errors.Errorf("unable to create Vulkan instance")
 	}
@@ -147,12 +152,12 @@ func getExtensions() []string {
 	}
 
 	// Get required extensions for GLFW.
-	var nglfw_required_extensions C.uint32_t
-	glfw_required_extensions := C.glfwGetRequiredInstanceExtensions(&nglfw_required_extensions)
-	glfwRequiredExtensions := getStringSlice(unsafe.Pointer(glfw_required_extensions), int(nglfw_required_extensions))
-	dbg.Println("nglfw_required_extensions:", len(glfwRequiredExtensions))
+	var nglfwRequiredExtensions C.uint32_t
+	_glfwRequiredExtensions := C.glfwGetRequiredInstanceExtensions(&nglfwRequiredExtensions)
+	glfwRequiredExtensions := getStringSlice(unsafe.Pointer(_glfwRequiredExtensions), int(nglfwRequiredExtensions))
+	dbg.Println("nglfwRequiredExtensions:", len(glfwRequiredExtensions))
 	for _, glfwRequiredExtension := range glfwRequiredExtensions {
-		dbg.Println("   glfw_required_extension:", glfwRequiredExtension)
+		dbg.Println("   glfwRequiredExtension:", glfwRequiredExtension)
 	}
 
 	// Get required extensions by user.
@@ -216,75 +221,79 @@ func getLayers() []string {
 	return enabledLayers
 }
 
-func initDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
+func initPhysicalDevice(instance *C.VkInstance) (*C.VkPhysicalDevice, error) {
 	// TODO: rank physical devices by score if more than one is present. E.g.
 	// prefer dedicated graphics card with capability for larger textures.
 	//
 	// ref: https://vulkan-tutorial.com/en/Drawing_a_triangle/Setup/Physical_devices_and_queue_families#page_Base-device-suitability-checks
 
 	// Get physical devices.
-	var ndevices C.uint32_t
-	C.vkEnumeratePhysicalDevices(*instance, &ndevices, nil)
-	if ndevices == 0 {
+	var nphysicalDevices C.uint32_t
+	C.vkEnumeratePhysicalDevices(*instance, &nphysicalDevices, nil)
+	if nphysicalDevices == 0 {
 		return nil, errors.Errorf("unable to locate physical device (GPU)")
 	}
-	if ndevices > 1 {
-		warn.Printf("multiple (%d) physical device (GPU) located; support for ranking physical devices not yet implemented", ndevices)
+	if nphysicalDevices > 1 {
+		warn.Printf("multiple (%d) physical device (GPU) located; support for ranking physical devices not yet implemented", nphysicalDevices)
 	}
-	devices := make([]C.VkPhysicalDevice, int(ndevices))
-	C.vkEnumeratePhysicalDevices(*instance, &ndevices, &devices[0])
-	dbg.Println("ndevices:", len(devices))
-	for _, device := range devices {
-		if !isSuitableDevice(&device) {
+	physicalDevices := make([]C.VkPhysicalDevice, int(nphysicalDevices))
+	C.vkEnumeratePhysicalDevices(*instance, &nphysicalDevices, &physicalDevices[0])
+	dbg.Println("nphysicalDevices:", len(physicalDevices))
+	for _, physicalDevice := range physicalDevices {
+		if !isSuitableDevice(&physicalDevice) {
 			continue
 		}
-		_device := C.new_VkPhysicalDevice()
-		*_device = device // allocate pointer on C heap.
-		return _device, nil
+		_physicalDevice := C.new_VkPhysicalDevice()
+		*_physicalDevice = physicalDevice // allocate pointer on C heap.
+		return _physicalDevice, nil
 	}
 	return nil, errors.Errorf("unable to locate suitable physical device (GPU)")
 }
 
-func isSuitableDevice(device *C.VkPhysicalDevice) bool {
+func isSuitableDevice(physicalDevice *C.VkPhysicalDevice) bool {
 	// Get device properties.
-	var device_properties C.VkPhysicalDeviceProperties
-	C.vkGetPhysicalDeviceProperties(*device, &device_properties)
-	deviceName := C.GoString(&device_properties.deviceName[0])
+	var deviceProperties C.VkPhysicalDeviceProperties
+	C.vkGetPhysicalDeviceProperties(*physicalDevice, &deviceProperties)
+	deviceName := C.GoString(&deviceProperties.deviceName[0])
 	dbg.Println("   deviceName:", deviceName)
-	pretty.Println("   device_properties:", device_properties)
+	pretty.Println("   deviceProperties:", deviceProperties)
 
 	// Get device features.
-	var device_features C.VkPhysicalDeviceFeatures
-	C.vkGetPhysicalDeviceFeatures(*device, &device_features)
-	pretty.Println("   device_features:", device_features)
+	var deviceFeatures C.VkPhysicalDeviceFeatures
+	C.vkGetPhysicalDeviceFeatures(*physicalDevice, &deviceFeatures)
+	pretty.Println("   deviceFeatures:", deviceFeatures)
 
 	// Find queue which supports graphics operations.
-	queue_families := getQueueFamilies(device)
-	if !hasQueueFlag(queue_families, C.VK_QUEUE_GRAPHICS_BIT) {
+	queueFamilies := getQueueFamilies(physicalDevice)
+	dbg.Println("nqueueFamilies:", len(queueFamilies))
+	for _, queueFamily := range queueFamilies {
+		pretty.Println("   queueFamily:", queueFamily)
+	}
+	if _, ok := findQueueWithFlag(queueFamilies, C.VK_QUEUE_GRAPHICS_BIT); !ok {
 		return false
 	}
 
 	return true
 }
 
-func hasQueueFlag(queue_families []C.VkQueueFamilyProperties, queueFlags C.VkQueueFlags) bool {
-	for _, queue_family := range queue_families {
-		if queue_family.queueFlags&queueFlags == queueFlags {
-			return true
+func findQueueWithFlag(queueFamilies []C.VkQueueFamilyProperties, queueFlags C.VkQueueFlags) (int, bool) {
+	for queueFamilyIndex, queueFamily := range queueFamilies {
+		if queueFamily.queueFlags&queueFlags == queueFlags {
+			return queueFamilyIndex, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 func initDebugMessanger(instance *C.VkInstance) (*C.VkDebugUtilsMessengerEXT, error) {
-	debug_messanger_create_info := C.new_VkDebugUtilsMessengerCreateInfoEXT()
-	populateDebugMessangerCreateInfo(debug_messanger_create_info)
-	debug_messenger := C.new_VkDebugUtilsMessengerEXT()
-	result := CreateDebugUtilsMessengerEXT(*instance, debug_messanger_create_info, nil, debug_messenger)
+	debugMessangerCreateInfo := C.new_VkDebugUtilsMessengerCreateInfoEXT()
+	populateDebugMessangerCreateInfo(debugMessangerCreateInfo)
+	debugMessenger := C.new_VkDebugUtilsMessengerEXT()
+	result := CreateDebugUtilsMessengerEXT(*instance, debugMessangerCreateInfo, nil, debugMessenger)
 	if result != C.VK_SUCCESS {
 		return nil, errors.Errorf("unable to register debug messanger (result=%d)", result)
 	}
-	return debug_messenger, nil
+	return debugMessenger, nil
 }
 
 func CreateDebugUtilsMessengerEXT(instance C.VkInstance, pCreateInfo *C.VkDebugUtilsMessengerCreateInfoEXT, pAllocator *C.VkAllocationCallbacks, pMessenger *C.VkDebugUtilsMessengerEXT) C.VkResult {
@@ -303,25 +312,52 @@ func DestroyDebugUtilsMessengerEXT(instance C.VkInstance, messenger C.VkDebugUti
 	C.invoke_DestroyDebugUtilsMessengerEXT(fn, instance, messenger, pAllocator)
 }
 
-func populateDebugMessangerCreateInfo(create_info *C.VkDebugUtilsMessengerCreateInfoEXT) {
-	create_info.sType = C.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT
-	create_info.messageSeverity = C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
-	create_info.messageType = C.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
-	//create_info.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debug_callback))
-	create_info.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debugCallback))
-	create_info.pUserData = nil // optional.
+func populateDebugMessangerCreateInfo(createInfo *C.VkDebugUtilsMessengerCreateInfoEXT) {
+	createInfo.sType = C.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT
+	createInfo.messageSeverity = C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
+	createInfo.messageType = C.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | C.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+	//createInfo.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debug_callback))
+	createInfo.pfnUserCallback = (C.PFN_vkDebugUtilsMessengerCallbackEXT)(unsafe.Pointer(C.debugCallback))
+	createInfo.pUserData = nil // optional.
 }
 
 func getQueueFamilies(device *C.VkPhysicalDevice) []C.VkQueueFamilyProperties {
-	var nqueue_families C.uint32_t
-	C.vkGetPhysicalDeviceQueueFamilyProperties(*device, &nqueue_families, nil)
-	queue_families := make([]C.VkQueueFamilyProperties, int(nqueue_families))
-	C.vkGetPhysicalDeviceQueueFamilyProperties(*device, &nqueue_families, &queue_families[0])
-	dbg.Println("nqueue_families:", len(queue_families))
-	for _, queue_family := range queue_families {
-		pretty.Println("   queue_family:", queue_family)
+	var nqueueFamilies C.uint32_t
+	C.vkGetPhysicalDeviceQueueFamilyProperties(*device, &nqueueFamilies, nil)
+	queueFamilies := make([]C.VkQueueFamilyProperties, int(nqueueFamilies))
+	C.vkGetPhysicalDeviceQueueFamilyProperties(*device, &nqueueFamilies, &queueFamilies[0])
+	return queueFamilies
+}
+
+func initDevice(app *App) (*C.VkDevice, error) {
+	queueFamilies := getQueueFamilies(app.physicalDevice)
+	queueFamilyIndex, ok := findQueueWithFlag(queueFamilies, C.VK_QUEUE_GRAPHICS_BIT)
+	if !ok {
+		return nil, errors.Errorf("unable to locate queue family with support for graphics operations")
 	}
-	return queue_families
+	const queueCount = 1
+	var queuePriorities [queueCount]C.float
+	queueCreateInfo := C.new_VkDeviceQueueCreateInfo()
+	queueCreateInfo.sType = C.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
+	queueCreateInfo.queueFamilyIndex = C.uint(queueFamilyIndex)
+	queueCreateInfo.queueCount = queueCount
+	queueCreateInfo.pQueuePriorities = &queuePriorities[0]
+	enabledFeatures := C.new_VkPhysicalDeviceFeatures()
+	// TODO: enable device features here when needed.
+	createInfo := C.new_VkDeviceCreateInfo()
+	createInfo.sType = C.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
+	createInfo.queueCreateInfoCount = queueCount
+	createInfo.pQueueCreateInfos = queueCreateInfo
+	createInfo.enabledLayerCount = 0 // ignored by recent version of Vulkan.
+	//createInfo.ppEnabledLayerNames = foo
+	createInfo.enabledExtensionCount = 0 // no device specific extensions enabled for now.
+	//createInfo.ppEnabledExtensionNames = foo
+	createInfo.pEnabledFeatures = enabledFeatures
+	device := C.new_VkDevice()
+	if result := C.vkCreateDevice(*app.physicalDevice, createInfo, nil, device); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create device (result=%d)", result)
+	}
+	return device, nil
 }
 
 // ### [ Helper functions ] ####################################################
