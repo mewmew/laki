@@ -55,4 +55,8 @@ package vk
 // VkShaderModule * new_VkShaderModule() {
 //    return calloc(1, sizeof(VkShaderModule));
 // }
+//
+// VkPipelineLayout * new_VkPipelineLayout() {
+//    return calloc(1, sizeof(VkPipelineLayout));
+// }
 import "C"

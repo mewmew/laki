@@ -25,6 +25,8 @@ type App struct {
 	// Shaders.
 	vertexShaderModule   *C.VkShaderModule
 	fragmentShaderModule *C.VkShaderModule
+	// Uniform values.
+	pipelineLayout *C.VkPipelineLayout
 }
 
 func newApp() *App {

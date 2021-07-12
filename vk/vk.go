@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Fixed_functions
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Render_passes
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -124,6 +124,7 @@ func InitVulkan(app *App) error {
 }
 
 func CleanupVulkan(app *App) {
+	C.vkDestroyPipelineLayout(*app.device, *app.pipelineLayout, nil)
 	C.vkDestroyShaderModule(*app.device, *app.fragmentShaderModule, nil)
 	C.vkDestroyShaderModule(*app.device, *app.vertexShaderModule, nil)
 	for i := range app.swapchainImgViews {
@@ -680,6 +681,129 @@ func initGraphicsPipeline(app *App) error {
 		return errors.WithStack(err)
 	}
 	_ = shaderStageCreateInfos
+
+	// Vertex input.
+	vertexInputCreateInfo := C.VkPipelineVertexInputStateCreateInfo{
+		sType:                           C.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		vertexBindingDescriptionCount:   0,
+		pVertexBindingDescriptions:      nil,
+		vertexAttributeDescriptionCount: 0,
+		pVertexAttributeDescriptions:    nil,
+	}
+	_ = vertexInputCreateInfo
+
+	// Input assembler    (fixed-function stage)
+	inputAssemblyCreateInfo := C.VkPipelineInputAssemblyStateCreateInfo{
+		sType:                  C.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		topology:               C.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		primitiveRestartEnable: C.VK_FALSE,
+	}
+	_ = inputAssemblyCreateInfo
+
+	// Vertex shader      (programmable)         // DONE
+	_ = shaderStageCreateInfos[0]
+
+	// Tessalation        (programmable)
+	// Geometry shader    (programmable)
+
+	// Viewports and scissors.
+	viewport := C.VkViewport{
+		x:        0.0,
+		y:        0.0,
+		width:    C.float(app.swapchainExtent.width),
+		height:   C.float(app.swapchainExtent.height),
+		minDepth: 0.0,
+		maxDepth: 1.0,
+	}
+	scissor := C.VkRect2D{
+		offset: C.VkOffset2D{x: 0, y: 0},
+		extent: app.swapchainExtent,
+	}
+	viewportCreateInfo := C.VkPipelineViewportStateCreateInfo{
+		sType:         C.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		viewportCount: 1,
+		pViewports:    &viewport,
+		scissorCount:  1,
+		pScissors:     &scissor,
+	}
+
+	// Rasterization      (fixed-function stage)
+	rasterizationCreateInfo := C.VkPipelineRasterizationStateCreateInfo{
+		sType:                   C.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		depthClampEnable:        C.VK_FALSE,
+		rasterizerDiscardEnable: C.VK_FALSE,
+		polygonMode:             C.VK_POLYGON_MODE_FILL,
+		cullMode:                C.VK_CULL_MODE_BACK_BIT,
+		frontFace:               C.VK_FRONT_FACE_CLOCKWISE,
+		depthBiasEnable:         C.VK_FALSE,
+		depthBiasConstantFactor: 0.0, // optional
+		depthBiasClamp:          0.0, // optional
+		depthBiasSlopeFactor:    0.0, // optional
+		lineWidth:               1.0,
+	}
+	_ = rasterizationCreateInfo
+
+	// Multisampling.
+	multisampleCreateInfo := C.VkPipelineMultisampleStateCreateInfo{
+		sType:                 C.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		rasterizationSamples:  C.VK_SAMPLE_COUNT_1_BIT,
+		sampleShadingEnable:   C.VK_FALSE,
+		minSampleShading:      1.0,        // optional
+		pSampleMask:           nil,        // optional
+		alphaToCoverageEnable: C.VK_FALSE, // optional
+		alphaToOneEnable:      C.VK_FALSE, // optional
+	}
+
+	// Depth and stencil testing.
+	//depthStencilCreateInfo := C.VkPipelineDepthStencilStateCreateInfo
+
+	// Fragment shader    (programmable)         // DONE
+	_ = shaderStageCreateInfos[1]
+
+	// Color blending     (fixed-function stage)
+	colorBlendAttachment := C.VkPipelineColorBlendAttachmentState{
+		blendEnable:         C.VK_FALSE,
+		srcColorBlendFactor: C.VK_BLEND_FACTOR_ONE,  // optional
+		dstColorBlendFactor: C.VK_BLEND_FACTOR_ZERO, // optional
+		colorBlendOp:        C.VK_BLEND_OP_ADD,      // optional
+		srcAlphaBlendFactor: C.VK_BLEND_FACTOR_ONE,  // optional
+		dstAlphaBlendFactor: C.VK_BLEND_FACTOR_ZERO, // optional
+		alphaBlendOp:        C.VK_BLEND_OP_ADD,      // optional
+		colorWriteMask:      C.VK_COLOR_COMPONENT_R_BIT | C.VK_COLOR_COMPONENT_G_BIT | C.VK_COLOR_COMPONENT_B_BIT | C.VK_COLOR_COMPONENT_A_BIT,
+	}
+	colorBlendCreateInfo := C.VkPipelineColorBlendStateCreateInfo{
+		sType:           C.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		logicOpEnable:   C.VK_FALSE,
+		logicOp:         C.VK_LOGIC_OP_COPY, // optional
+		attachmentCount: 1,
+		pAttachments:    &colorBlendAttachment,
+		blendConstants:  [4]C.float{0.0, 0.0, 0.0, 0.0}, // optional
+	}
+
+	// Dynamic state.
+	dynamicStates := []C.VkDynamicState{
+		C.VK_DYNAMIC_STATE_VIEWPORT,
+	}
+	dynamicStateCreateInfo := C.VkPipelineDynamicStateCreateInfo{
+		sType:             C.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		dynamicStateCount: C.uint(len(dynamicStates)),
+		pDynamicStates:    &dynamicStates[0],
+	}
+
+	// Uniform values.
+	pipelineLayoutCreateInfo := C.VkPipelineLayoutCreateInfo{
+		sType:                  C.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		setLayoutCount:         0,   // optional
+		pSetLayouts:            nil, // optional
+		pushConstantRangeCount: 0,   // optional
+		pPushConstantRanges:    nil, // optional
+	}
+	pipelineLayout := C.new_VkPipelineLayout()
+	if result := C.vkCreatePipelineLayout(*app.device, &pipelineLayoutCreateInfo, nil, pipelineLayout); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to create pipeline layout (result=%d)", result)
+	}
+	app.pipelineLayout = pipelineLayout
+
 	return nil
 }
 

@@ -16,5 +16,6 @@ extern VkQueue * new_VkQueue();
 extern VkSurfaceKHR * new_VkSurfaceKHR();
 extern VkSwapchainKHR * new_VkSwapchainKHR();
 extern VkShaderModule * new_VkShaderModule();
+extern VkPipelineLayout * new_VkPipelineLayout();
 
 #endif // #ifndef __MALLOC_H__
