@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation#page_Subpass-dependencies
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation#page_Frames-in-flight
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -60,6 +60,9 @@ var RequiredLayers = []string{
 var RequiredDeviceExtensions = []string{
 	C.VK_KHR_SWAPCHAIN_EXTENSION_NAME, // "VK_KHR_swapchain"
 }
+
+// Maximum number of frames processed concurrently by GPU.
+const MaxFramesInFlight = 2
 
 func Init() error {
 	app := newApp()
@@ -1091,7 +1094,7 @@ func initSemaphorse(app *App) error {
 }
 
 func drawFrame(app *App) error {
-	dbg.Println("vk.drawFrame")
+	//dbg.Println("vk.drawFrame")
 	const timeout = C.UINT64_MAX // disable timeout
 	var imageIndex C.uint32_t    // swapchainImgs array index
 	if result := C.vkAcquireNextImageKHR(*app.device, *app.swapchain, timeout, *app.imageAvailableSemaphore, nil, &imageIndex); result != C.VK_SUCCESS {
@@ -1131,6 +1134,11 @@ func drawFrame(app *App) error {
 	if result := C.vkQueuePresentKHR(*app.presentQueue, &presentInfo); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to queue image for presentation (result=%d)", result)
 	}
+
+	if result := C.vkQueueWaitIdle(*app.presentQueue); result != C.VK_SUCCESS {
+		warn.Printf("unable to wait for present queue to become idle (result=%d)", result)
+	}
+
 	return nil
 }
 
