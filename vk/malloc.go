@@ -97,4 +97,12 @@ package vk
 // VkGraphicsPipelineCreateInfo * new_VkGraphicsPipelineCreateInfos(size_t n) {
 //    return calloc(n, sizeof(VkGraphicsPipelineCreateInfo));
 // }
+//
+// VkFramebuffer * new_VkFramebuffers(size_t n) {
+//    return calloc(n, sizeof(VkFramebuffer));
+// }
+//
+// VkImageView * new_VkImageViews(size_t n) {
+//    return calloc(n, sizeof(VkImageView));
+// }
 import "C"

@@ -128,10 +128,18 @@ func InitVulkan(app *App) error {
 	}
 	app.graphicsPipelines = graphicsPipelines
 	pretty.Println("   graphicsPipelines:", graphicsPipelines)
+	framebuffers, err := initFramebuffers(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainFramebuffers = framebuffers
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	for i := range app.swapchainFramebuffers {
+		C.vkDestroyFramebuffer(*app.device, app.swapchainFramebuffers[i], nil)
+	}
 	for _, graphicsPipeline := range app.graphicsPipelines {
 		C.vkDestroyPipeline(*app.device, graphicsPipeline, nil)
 	}
@@ -939,6 +947,26 @@ func createShaderModule(app *App, shaderPath string) (*C.VkShaderModule, error) 
 		return nil, errors.Errorf("unable to create shader module %q (result=%d)", shaderPath, result)
 	}
 	return shaderModule, nil
+}
+
+func initFramebuffers(app *App) ([]C.VkFramebuffer, error) {
+	framebuffers := newVkFramebufferSlice(make([]C.VkFramebuffer, len(app.swapchainImgViews))...)
+	for i := range app.swapchainImgViews {
+		attachments := newVkImageViewSlice(app.swapchainImgViews[i])
+		framebufferCreateInfo := C.VkFramebufferCreateInfo{
+			sType:           C.VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+			renderPass:      *app.renderPass,
+			attachmentCount: C.uint(len(attachments)),
+			pAttachments:    &attachments[0],
+			width:           app.swapchainExtent.width,
+			height:          app.swapchainExtent.height,
+			layers:          1,
+		}
+		if result := C.vkCreateFramebuffer(*app.device, &framebufferCreateInfo, nil, &framebuffers[i]); result != C.VK_SUCCESS {
+			return nil, errors.Errorf("unable to create framebuffer (result=%d)", result)
+		}
+	}
+	return framebuffers, nil
 }
 
 // ### [ Helper functions ] ####################################################

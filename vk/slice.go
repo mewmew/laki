@@ -131,3 +131,33 @@ func newVkGraphicsPipelineCreateInfoSlice(elems ...C.VkGraphicsPipelineCreateInf
 	}
 	return dst
 }
+
+func newVkFramebufferSlice(elems ...C.VkFramebuffer) []C.VkFramebuffer {
+	n := len(elems)
+	data := C.new_VkFramebuffers(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkFramebuffer)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}
+
+func newVkImageViewSlice(elems ...C.VkImageView) []C.VkImageView {
+	n := len(elems)
+	data := C.new_VkImageViews(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkImageView)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}

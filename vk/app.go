@@ -16,12 +16,13 @@ type App struct {
 	presentQueue   *C.VkQueue
 	surface        *C.VkSurfaceKHR
 	*QueueFamilyIndices
-	swapchainSupportInfo *SwapchainSupportInfo
-	swapchain            *C.VkSwapchainKHR
-	swapchainImageFormat C.VkFormat
-	swapchainExtent      C.VkExtent2D
-	swapchainImgs        []C.VkImage
-	swapchainImgViews    []C.VkImageView
+	swapchainSupportInfo  *SwapchainSupportInfo
+	swapchain             *C.VkSwapchainKHR
+	swapchainImageFormat  C.VkFormat
+	swapchainExtent       C.VkExtent2D
+	swapchainImgs         []C.VkImage
+	swapchainImgViews     []C.VkImageView
+	swapchainFramebuffers []C.VkFramebuffer
 	// Shaders.
 	vertexShaderModule   *C.VkShaderModule
 	fragmentShaderModule *C.VkShaderModule

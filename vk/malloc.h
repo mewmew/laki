@@ -27,5 +27,7 @@ extern VkViewport * new_VkViewports(size_t n);
 extern VkRect2D * new_VkRect2Ds(size_t n);
 extern VkPipelineColorBlendAttachmentState * new_VkPipelineColorBlendAttachmentStates(size_t n);
 extern VkGraphicsPipelineCreateInfo * new_VkGraphicsPipelineCreateInfos(size_t n);
+extern VkFramebuffer * new_VkFramebuffers(size_t n);
+extern VkImageView * new_VkImageViews(size_t n);
 
 #endif // #ifndef __MALLOC_H__
