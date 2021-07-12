@@ -63,4 +63,38 @@ package vk
 // VkRenderPass * new_VkRenderPass() {
 //    return calloc(1, sizeof(VkRenderPass));
 // }
+//
+//
+//
+// VkPipeline * new_VkPipelines(size_t n) {
+//    return calloc(n, sizeof(VkPipeline));
+// }
+//
+// VkAttachmentDescription * new_VkAttachmentDescriptions(size_t n) {
+//    return calloc(n, sizeof(VkAttachmentDescription));
+// }
+//
+// VkAttachmentReference * new_VkAttachmentReferences(size_t n) {
+//    return calloc(n, sizeof(VkAttachmentReference));
+// }
+//
+// VkSubpassDescription * new_VkSubpassDescriptions(size_t n) {
+//    return calloc(n, sizeof(VkSubpassDescription));
+// }
+//
+// VkViewport * new_VkViewports(size_t n) {
+//    return calloc(n, sizeof(VkViewport));
+// }
+//
+// VkRect2D * new_VkRect2Ds(size_t n) {
+//    return calloc(n, sizeof(VkRect2D));
+// }
+//
+// VkPipelineColorBlendAttachmentState * new_VkPipelineColorBlendAttachmentStates(size_t n) {
+//    return calloc(n, sizeof(VkPipelineColorBlendAttachmentState));
+// }
+//
+// VkGraphicsPipelineCreateInfo * new_VkGraphicsPipelineCreateInfos(size_t n) {
+//    return calloc(n, sizeof(VkGraphicsPipelineCreateInfo));
+// }
 import "C"

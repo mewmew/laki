@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Render_passes
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Framebuffers
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -122,13 +122,19 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.renderPass = renderPass
-	if err := initGraphicsPipeline(app); err != nil {
+	graphicsPipelines, err := initGraphicsPipeline(app)
+	if err != nil {
 		return errors.WithStack(err)
 	}
+	app.graphicsPipelines = graphicsPipelines
+	pretty.Println("   graphicsPipelines:", graphicsPipelines)
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	for _, graphicsPipeline := range app.graphicsPipelines {
+		C.vkDestroyPipeline(*app.device, graphicsPipeline, nil)
+	}
 	C.vkDestroyPipelineLayout(*app.device, *app.pipelineLayout, nil)
 	C.vkDestroyRenderPass(*app.device, *app.renderPass, nil)
 	C.vkDestroyShaderModule(*app.device, *app.fragmentShaderModule, nil)
@@ -692,16 +698,14 @@ func initRenderPass(app *App) (*C.VkRenderPass, error) {
 		initialLayout:  C.VK_IMAGE_LAYOUT_UNDEFINED,
 		finalLayout:    C.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 	}
-	colorAttachments := []C.VkAttachmentDescription{
-		colorAttachment,
-	}
+	colorAttachments := newVkAttachmentDescriptionSlice(colorAttachment)
+
 	colorAttachmentRef := C.VkAttachmentReference{
 		attachment: 0, // index of color attachment descriptor (we only have one).
 		layout:     C.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	}
-	colorAttachmentRefs := []C.VkAttachmentReference{
-		colorAttachmentRef,
-	}
+	colorAttachmentRefs := newVkAttachmentReferenceSlice(colorAttachmentRef)
+
 	subpass := C.VkSubpassDescription{
 		pipelineBindPoint:       C.VK_PIPELINE_BIND_POINT_GRAPHICS,
 		inputAttachmentCount:    0,   // optional
@@ -713,9 +717,8 @@ func initRenderPass(app *App) (*C.VkRenderPass, error) {
 		preserveAttachmentCount: 0,   // optional
 		pPreserveAttachments:    nil, // optional
 	}
-	subpasses := []C.VkSubpassDescription{
-		subpass,
-	}
+	subpasses := newVkSubpassDescriptionSlice(subpass)
+
 	renderPassCreateInfo := C.VkRenderPassCreateInfo{
 		sType:           C.VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		attachmentCount: C.uint(len(colorAttachments)),
@@ -732,33 +735,30 @@ func initRenderPass(app *App) (*C.VkRenderPass, error) {
 	return renderPass, nil
 }
 
-func initGraphicsPipeline(app *App) error {
-	shaderStageCreateInfos, err := initShaderModules(app)
+func initGraphicsPipeline(app *App) ([]C.VkPipeline, error) {
+	shaderStages, err := initShaderModules(app)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
-	_ = shaderStageCreateInfos
 
 	// Vertex input.
-	vertexInputCreateInfo := C.VkPipelineVertexInputStateCreateInfo{
+	vertexInputState := C.VkPipelineVertexInputStateCreateInfo{
 		sType:                           C.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		vertexBindingDescriptionCount:   0,
 		pVertexBindingDescriptions:      nil,
 		vertexAttributeDescriptionCount: 0,
 		pVertexAttributeDescriptions:    nil,
 	}
-	_ = vertexInputCreateInfo
 
 	// Input assembler    (fixed-function stage)
-	inputAssemblyCreateInfo := C.VkPipelineInputAssemblyStateCreateInfo{
+	inputAssemblyState := C.VkPipelineInputAssemblyStateCreateInfo{
 		sType:                  C.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		topology:               C.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		primitiveRestartEnable: C.VK_FALSE,
 	}
-	_ = inputAssemblyCreateInfo
 
 	// Vertex shader      (programmable)         // DONE
-	_ = shaderStageCreateInfos[0]
+	//shaderStages[0]
 
 	// Tessalation        (programmable)
 	// Geometry shader    (programmable)
@@ -772,20 +772,22 @@ func initGraphicsPipeline(app *App) error {
 		minDepth: 0.0,
 		maxDepth: 1.0,
 	}
+	viewports := newVkViewportSlice(viewport)
 	scissor := C.VkRect2D{
 		offset: C.VkOffset2D{x: 0, y: 0},
 		extent: app.swapchainExtent,
 	}
-	viewportCreateInfo := C.VkPipelineViewportStateCreateInfo{
+	scissors := newVkRect2DSlice(scissor)
+	viewportState := C.VkPipelineViewportStateCreateInfo{
 		sType:         C.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		viewportCount: 1,
-		pViewports:    &viewport,
-		scissorCount:  1,
-		pScissors:     &scissor,
+		viewportCount: C.uint(len(viewports)),
+		pViewports:    &viewports[0],
+		scissorCount:  C.uint(len(scissors)),
+		pScissors:     &scissors[0],
 	}
 
 	// Rasterization      (fixed-function stage)
-	rasterizationCreateInfo := C.VkPipelineRasterizationStateCreateInfo{
+	rasterizationState := C.VkPipelineRasterizationStateCreateInfo{
 		sType:                   C.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		depthClampEnable:        C.VK_FALSE,
 		rasterizerDiscardEnable: C.VK_FALSE,
@@ -798,10 +800,9 @@ func initGraphicsPipeline(app *App) error {
 		depthBiasSlopeFactor:    0.0, // optional
 		lineWidth:               1.0,
 	}
-	_ = rasterizationCreateInfo
 
 	// Multisampling.
-	multisampleCreateInfo := C.VkPipelineMultisampleStateCreateInfo{
+	multisampleState := C.VkPipelineMultisampleStateCreateInfo{
 		sType:                 C.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		rasterizationSamples:  C.VK_SAMPLE_COUNT_1_BIT,
 		sampleShadingEnable:   C.VK_FALSE,
@@ -815,7 +816,7 @@ func initGraphicsPipeline(app *App) error {
 	//depthStencilCreateInfo := C.VkPipelineDepthStencilStateCreateInfo
 
 	// Fragment shader    (programmable)         // DONE
-	_ = shaderStageCreateInfos[1]
+	//shaderStages[1]
 
 	// Color blending     (fixed-function stage)
 	colorBlendAttachment := C.VkPipelineColorBlendAttachmentState{
@@ -828,12 +829,13 @@ func initGraphicsPipeline(app *App) error {
 		alphaBlendOp:        C.VK_BLEND_OP_ADD,      // optional
 		colorWriteMask:      C.VK_COLOR_COMPONENT_R_BIT | C.VK_COLOR_COMPONENT_G_BIT | C.VK_COLOR_COMPONENT_B_BIT | C.VK_COLOR_COMPONENT_A_BIT,
 	}
-	colorBlendCreateInfo := C.VkPipelineColorBlendStateCreateInfo{
+	colorBlendAttachments := newVkPipelineColorBlendAttachmentStateSlice(colorBlendAttachment)
+	colorBlendState := C.VkPipelineColorBlendStateCreateInfo{
 		sType:           C.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		logicOpEnable:   C.VK_FALSE,
 		logicOp:         C.VK_LOGIC_OP_COPY, // optional
-		attachmentCount: 1,
-		pAttachments:    &colorBlendAttachment,
+		attachmentCount: C.uint(len(colorBlendAttachments)),
+		pAttachments:    &colorBlendAttachments[0],
 		blendConstants:  [4]C.float{0.0, 0.0, 0.0, 0.0}, // optional
 	}
 
@@ -841,7 +843,7 @@ func initGraphicsPipeline(app *App) error {
 	dynamicStates := []C.VkDynamicState{
 		C.VK_DYNAMIC_STATE_VIEWPORT,
 	}
-	dynamicStateCreateInfo := C.VkPipelineDynamicStateCreateInfo{
+	dynamicState := C.VkPipelineDynamicStateCreateInfo{
 		sType:             C.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		dynamicStateCount: C.uint(len(dynamicStates)),
 		pDynamicStates:    &dynamicStates[0],
@@ -857,11 +859,35 @@ func initGraphicsPipeline(app *App) error {
 	}
 	pipelineLayout := C.new_VkPipelineLayout()
 	if result := C.vkCreatePipelineLayout(*app.device, &pipelineLayoutCreateInfo, nil, pipelineLayout); result != C.VK_SUCCESS {
-		return errors.Errorf("unable to create pipeline layout (result=%d)", result)
+		return nil, errors.Errorf("unable to create pipeline layout (result=%d)", result)
 	}
 	app.pipelineLayout = pipelineLayout
 
-	return nil
+	graphicsPipelineCreateInfo := C.VkGraphicsPipelineCreateInfo{
+		sType:               C.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		stageCount:          C.uint(len(shaderStages)),
+		pStages:             &shaderStages[0],
+		pVertexInputState:   &vertexInputState,
+		pInputAssemblyState: &inputAssemblyState,
+		pTessellationState:  nil, // optional
+		pViewportState:      &viewportState,
+		pRasterizationState: &rasterizationState,
+		pMultisampleState:   &multisampleState,
+		pDepthStencilState:  nil, // optional
+		pColorBlendState:    &colorBlendState,
+		pDynamicState:       &dynamicState,
+		layout:              *pipelineLayout,
+		renderPass:          *app.renderPass,
+		subpass:             0,   // index of subpass in the render pass
+		basePipelineHandle:  nil, // optional
+		basePipelineIndex:   -1,  // optional
+	}
+	graphicsPipelineCreateInfos := newVkGraphicsPipelineCreateInfoSlice(graphicsPipelineCreateInfo)
+	graphicsPipelines := newVkPipelineSlice(make([]C.VkPipeline, len(graphicsPipelineCreateInfos))...)
+	if result := C.vkCreateGraphicsPipelines(*app.device, nil, C.uint(len(graphicsPipelineCreateInfos)), &graphicsPipelineCreateInfos[0], nil, &graphicsPipelines[0]); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create graphics pipeline (result=%d)", result)
+	}
+	return graphicsPipelines, nil
 }
 
 func initShaderModules(app *App) ([]C.VkPipelineShaderStageCreateInfo, error) {

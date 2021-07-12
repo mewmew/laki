@@ -19,4 +19,13 @@ extern VkShaderModule * new_VkShaderModule();
 extern VkPipelineLayout * new_VkPipelineLayout();
 extern VkRenderPass * new_VkRenderPass();
 
+extern VkPipeline * new_VkPipelines(size_t n);
+extern VkAttachmentDescription * new_VkAttachmentDescriptions(size_t n);
+extern VkAttachmentReference * new_VkAttachmentReferences(size_t n);
+extern VkSubpassDescription * new_VkSubpassDescriptions(size_t n);
+extern VkViewport * new_VkViewports(size_t n);
+extern VkRect2D * new_VkRect2Ds(size_t n);
+extern VkPipelineColorBlendAttachmentState * new_VkPipelineColorBlendAttachmentStates(size_t n);
+extern VkGraphicsPipelineCreateInfo * new_VkGraphicsPipelineCreateInfos(size_t n);
+
 #endif // #ifndef __MALLOC_H__

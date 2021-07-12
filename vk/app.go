@@ -29,6 +29,8 @@ type App struct {
 	renderPass *C.VkRenderPass
 	// Uniform values.
 	pipelineLayout *C.VkPipelineLayout
+	// Graphics pipelines.
+	graphicsPipelines []C.VkPipeline
 }
 
 func newApp() *App {
