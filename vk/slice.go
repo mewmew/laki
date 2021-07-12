@@ -176,3 +176,18 @@ func newVkCommandBufferSlice(elems ...C.VkCommandBuffer) []C.VkCommandBuffer {
 	}
 	return dst
 }
+
+func newVkClearValueSlice(elems ...C.VkClearValue) []C.VkClearValue {
+	n := len(elems)
+	data := C.new_VkClearValues(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkClearValue)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}

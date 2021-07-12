@@ -113,4 +113,8 @@ package vk
 // VkCommandBuffer * new_VkCommandBuffers(size_t n) {
 //    return calloc(n, sizeof(VkCommandBuffer));
 // }
+//
+// VkClearValue * new_VkClearValues(size_t n) {
+//    return calloc(n, sizeof(VkClearValue));
+// }
 import "C"

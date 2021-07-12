@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Command_buffers
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -143,6 +143,12 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.swapchainCommandBuffers = commandBuffers
+
+	// TODO: move to event loop?
+	if err := render(app); err != nil {
+		return errors.WithStack(err)
+	}
+
 	return nil
 }
 
@@ -1003,6 +1009,55 @@ func initCommandBuffers(app *App) ([]C.VkCommandBuffer, error) {
 		return nil, errors.Errorf("unable to create command buffers (result=%d)", result)
 	}
 	return commandBuffers, nil
+}
+
+func render(app *App) error {
+	for i := range app.swapchainCommandBuffers {
+		commandBufferBeginInfo := C.VkCommandBufferBeginInfo{
+			sType:            C.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			flags:            0,   // optional
+			pInheritanceInfo: nil, // optional
+		}
+		if result := C.vkBeginCommandBuffer(app.swapchainCommandBuffers[i], &commandBufferBeginInfo); result != C.VK_SUCCESS {
+			return errors.Errorf("unable to begin recording command buffer (result=%d)", result)
+		}
+
+		clearColor := C.VkClearValue{
+			0.0, 0.0, 0.0, 1.0, // r, g, b, a
+		}
+		clearColors := newVkClearValueSlice(clearColor)
+
+		renderPassBeginInfo := C.VkRenderPassBeginInfo{
+			sType:       C.VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			renderPass:  *app.renderPass,
+			framebuffer: app.swapchainFramebuffers[i],
+			renderArea: C.VkRect2D{
+				offset: C.VkOffset2D{x: 0, y: 0},
+				extent: app.swapchainExtent,
+			},
+			clearValueCount: C.uint(len(clearColors)),
+			pClearValues:    &clearColors[0],
+		}
+
+		C.vkCmdBeginRenderPass(app.swapchainCommandBuffers[i], &renderPassBeginInfo, C.VK_SUBPASS_CONTENTS_INLINE)
+
+		C.vkCmdBindPipeline(app.swapchainCommandBuffers[i], C.VK_PIPELINE_BIND_POINT_GRAPHICS, app.graphicsPipelines[0]) // NOTE: we only use one graphics pipeline.
+
+		const (
+			vertexCount   = 3
+			instanceCount = 1
+			firstVertex   = 0
+			firstInstance = 0
+		)
+		C.vkCmdDraw(app.swapchainCommandBuffers[i], vertexCount, instanceCount, firstVertex, firstInstance)
+
+		C.vkCmdEndRenderPass(app.swapchainCommandBuffers[i])
+
+		if result := C.vkEndCommandBuffer(app.swapchainCommandBuffers[i]); result != C.VK_SUCCESS {
+			return errors.Errorf("unable to record command buffer (result=%d)", result)
+		}
+	}
+	return nil
 }
 
 // ### [ Helper functions ] ####################################################

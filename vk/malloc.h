@@ -31,5 +31,6 @@ extern VkGraphicsPipelineCreateInfo * new_VkGraphicsPipelineCreateInfos(size_t n
 extern VkFramebuffer * new_VkFramebuffers(size_t n);
 extern VkImageView * new_VkImageViews(size_t n);
 extern VkCommandBuffer * new_VkCommandBuffers(size_t n);
+extern VkClearValue * new_VkClearValues(size_t n);
 
 #endif // #ifndef __MALLOC_H__
