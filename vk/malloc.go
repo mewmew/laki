@@ -68,6 +68,10 @@ package vk
 //    return calloc(1, sizeof(VkCommandPool));
 // }
 //
+// VkSemaphore * new_VkSemaphore() {
+//    return calloc(1, sizeof(VkSemaphore));
+// }
+//
 //
 //
 // VkPipeline * new_VkPipelines(size_t n) {
@@ -116,5 +120,13 @@ package vk
 //
 // VkClearValue * new_VkClearValues(size_t n) {
 //    return calloc(n, sizeof(VkClearValue));
+// }
+//
+// VkSemaphore * new_VkSemaphores(size_t n) {
+//    return calloc(n, sizeof(VkSemaphore));
+// }
+//
+// VkSubmitInfo * new_VkSubmitInfos(size_t n) {
+//    return calloc(n, sizeof(VkSubmitInfo));
 // }
 import "C"

@@ -35,6 +35,9 @@ type App struct {
 	graphicsPipelines []C.VkPipeline
 
 	commandPool *C.VkCommandPool
+
+	imageAvailableSemaphore *C.VkSemaphore // image aquired, ready for rendering
+	renderFinishedSemaphore *C.VkSemaphore // rendering finished, ready for presentation
 }
 
 func newApp() *App {

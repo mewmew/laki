@@ -191,3 +191,33 @@ func newVkClearValueSlice(elems ...C.VkClearValue) []C.VkClearValue {
 	}
 	return dst
 }
+
+func newVkSemaphoreSlice(elems ...C.VkSemaphore) []C.VkSemaphore {
+	n := len(elems)
+	data := C.new_VkSemaphores(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkSemaphore)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}
+
+func newVkSubmitInfoSlice(elems ...C.VkSubmitInfo) []C.VkSubmitInfo {
+	n := len(elems)
+	data := C.new_VkSubmitInfos(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkSubmitInfo)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}

@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation#page_Subpass-dependencies
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -70,7 +70,7 @@ func Init() error {
 	}
 	defer CleanupVulkan(app)
 
-	EventLoop(app.win)
+	EventLoop(app)
 	return nil
 }
 
@@ -143,16 +143,18 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.swapchainCommandBuffers = commandBuffers
-
-	// TODO: move to event loop?
-	if err := render(app); err != nil {
+	if err := recordRenderCommands(app); err != nil {
 		return errors.WithStack(err)
 	}
-
+	if err := initSemaphorse(app); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	C.vkDestroySemaphore(*app.device, *app.imageAvailableSemaphore, nil)
+	C.vkDestroySemaphore(*app.device, *app.renderFinishedSemaphore, nil)
 	C.vkDestroyCommandPool(*app.device, *app.commandPool, nil)
 	for i := range app.swapchainFramebuffers {
 		C.vkDestroyFramebuffer(*app.device, app.swapchainFramebuffers[i], nil)
@@ -864,14 +866,14 @@ func initGraphicsPipeline(app *App) ([]C.VkPipeline, error) {
 	}
 
 	// Dynamic state.
-	dynamicStates := []C.VkDynamicState{
-		C.VK_DYNAMIC_STATE_VIEWPORT,
-	}
-	dynamicState := C.VkPipelineDynamicStateCreateInfo{
-		sType:             C.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		dynamicStateCount: C.uint(len(dynamicStates)),
-		pDynamicStates:    &dynamicStates[0],
-	}
+	//dynamicStates := []C.VkDynamicState{
+	//	C.VK_DYNAMIC_STATE_VIEWPORT,
+	//}
+	//dynamicState := C.VkPipelineDynamicStateCreateInfo{
+	//	sType:             C.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+	//	dynamicStateCount: C.uint(len(dynamicStates)),
+	//	pDynamicStates:    &dynamicStates[0],
+	//}
 
 	// Uniform values.
 	pipelineLayoutCreateInfo := C.VkPipelineLayoutCreateInfo{
@@ -899,12 +901,12 @@ func initGraphicsPipeline(app *App) ([]C.VkPipeline, error) {
 		pMultisampleState:   &multisampleState,
 		pDepthStencilState:  nil, // optional
 		pColorBlendState:    &colorBlendState,
-		pDynamicState:       &dynamicState,
-		layout:              *pipelineLayout,
-		renderPass:          *app.renderPass,
-		subpass:             0,   // index of subpass in the render pass
-		basePipelineHandle:  nil, // optional
-		basePipelineIndex:   -1,  // optional
+		//pDynamicState:       &dynamicState,
+		layout:             *pipelineLayout,
+		renderPass:         *app.renderPass,
+		subpass:            0,   // index of subpass in the render pass
+		basePipelineHandle: nil, // optional
+		basePipelineIndex:  -1,  // optional
 	}
 	graphicsPipelineCreateInfos := newVkGraphicsPipelineCreateInfoSlice(graphicsPipelineCreateInfo)
 	graphicsPipelines := newVkPipelineSlice(make([]C.VkPipeline, len(graphicsPipelineCreateInfos))...)
@@ -1011,7 +1013,7 @@ func initCommandBuffers(app *App) ([]C.VkCommandBuffer, error) {
 	return commandBuffers, nil
 }
 
-func render(app *App) error {
+func recordRenderCommands(app *App) error {
 	for i := range app.swapchainCommandBuffers {
 		commandBufferBeginInfo := C.VkCommandBufferBeginInfo{
 			sType:            C.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1056,6 +1058,54 @@ func render(app *App) error {
 		if result := C.vkEndCommandBuffer(app.swapchainCommandBuffers[i]); result != C.VK_SUCCESS {
 			return errors.Errorf("unable to record command buffer (result=%d)", result)
 		}
+	}
+	return nil
+}
+
+func initSemaphorse(app *App) error {
+	semaphoreCreateInfo := C.VkSemaphoreCreateInfo{
+		sType: C.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+	}
+	// Image available semaphore.
+	imageAvailableSemaphore := C.new_VkSemaphore()
+	if result := C.vkCreateSemaphore(*app.device, &semaphoreCreateInfo, nil, imageAvailableSemaphore); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to create semaphore (result=%d)", result)
+	}
+	app.imageAvailableSemaphore = imageAvailableSemaphore
+	// Rendering finished semaphore.
+	renderFinishedSemaphore := C.new_VkSemaphore()
+	if result := C.vkCreateSemaphore(*app.device, &semaphoreCreateInfo, nil, renderFinishedSemaphore); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to create semaphore (result=%d)", result)
+	}
+	app.renderFinishedSemaphore = renderFinishedSemaphore
+	return nil
+}
+
+func drawFrame(app *App) error {
+	dbg.Println("vk.drawFrame")
+	const timeout = C.UINT64_MAX // disable timeout
+	var imageIndex C.uint32_t    // swapchainImgs array index
+	if result := C.vkAcquireNextImageKHR(*app.device, *app.swapchain, timeout, *app.imageAvailableSemaphore, nil, &imageIndex); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to aquire next image (result=%d)", result)
+	}
+	waitSemaphores := newVkSemaphoreSlice(*app.imageAvailableSemaphore)
+	waitStages := []C.VkPipelineStageFlags{
+		C.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+	}
+	signalSemaphores := newVkSemaphoreSlice(*app.renderFinishedSemaphore)
+	submitInfo := C.VkSubmitInfo{
+		sType:                C.VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		waitSemaphoreCount:   C.uint(len(waitSemaphores)),
+		pWaitSemaphores:      &waitSemaphores[0],
+		pWaitDstStageMask:    &waitStages[0],
+		commandBufferCount:   1,
+		pCommandBuffers:      &app.swapchainCommandBuffers[imageIndex],
+		signalSemaphoreCount: C.uint(len(signalSemaphores)),
+		pSignalSemaphores:    &signalSemaphores[0],
+	}
+	submits := newVkSubmitInfoSlice(submitInfo)
+	if result := C.vkQueueSubmit(*app.graphicsQueue, C.uint(len(submits)), &submits[0], nil); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to submit command buffers to graphics queue (result=%d)", result)
 	}
 	return nil
 }
