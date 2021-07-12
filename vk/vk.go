@@ -12,8 +12,11 @@ package vk
 // #include "invoke.h"
 // #include "malloc.h"
 //
-//#cgo pkg-config: glfw3
-//#cgo pkg-config: vulkan
+//#cgo linux pkg-config: glfw3
+//#cgo linux pkg-config: vulkan
+//
+//#cgo windows LDFLAGS: -lglfw3dll
+//#cgo windows LDFLAGS: -lvulkan-1
 import "C"
 
 import (

@@ -10,7 +10,7 @@ shaders/%_frag.spv: shaders/%.frag
 	glslangValidator -V $< -o $@
 
 laki: shaders/shader_vert.spv shaders/shader_frag.spv
-	go build -o $@ ./cmd/laki
+	go build -v ./cmd/laki
 
 run: laki
 	./laki
