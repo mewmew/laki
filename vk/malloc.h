@@ -35,5 +35,7 @@ extern VkCommandBuffer * new_VkCommandBuffers(size_t n);
 extern VkClearValue * new_VkClearValues(size_t n);
 extern VkSemaphore * new_VkSemaphores(size_t n);
 extern VkSubmitInfo * new_VkSubmitInfos(size_t n);
+extern VkSubpassDependency * new_VkSubpassDependencys(size_t n);
+extern VkSwapchainKHR * new_VkSwapchainKHRs(size_t n);
 
 #endif // #ifndef __MALLOC_H__

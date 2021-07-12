@@ -744,15 +744,24 @@ func initRenderPass(app *App) (*C.VkRenderPass, error) {
 		pPreserveAttachments:    nil, // optional
 	}
 	subpasses := newVkSubpassDescriptionSlice(subpass)
-
+	dependency := C.VkSubpassDependency{
+		srcSubpass:      C.VK_SUBPASS_EXTERNAL,
+		dstSubpass:      0, // index of first and only subpass.
+		srcStageMask:    C.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		dstStageMask:    C.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		srcAccessMask:   0,
+		dstAccessMask:   C.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		dependencyFlags: 0, // optional
+	}
+	dependencies := newVkSubpassDependencySlice(dependency)
 	renderPassCreateInfo := C.VkRenderPassCreateInfo{
 		sType:           C.VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		attachmentCount: C.uint(len(colorAttachments)),
 		pAttachments:    &colorAttachments[0],
 		subpassCount:    C.uint(len(subpasses)),
 		pSubpasses:      &subpasses[0],
-		dependencyCount: 0,   // optional
-		pDependencies:   nil, // optional
+		dependencyCount: C.uint(len(dependencies)),
+		pDependencies:   &dependencies[0],
 	}
 	renderPass := C.new_VkRenderPass()
 	if result := C.vkCreateRenderPass(*app.device, &renderPassCreateInfo, nil, renderPass); result != C.VK_SUCCESS {
@@ -1106,6 +1115,21 @@ func drawFrame(app *App) error {
 	submits := newVkSubmitInfoSlice(submitInfo)
 	if result := C.vkQueueSubmit(*app.graphicsQueue, C.uint(len(submits)), &submits[0], nil); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to submit command buffers to graphics queue (result=%d)", result)
+	}
+	// Present frame.
+	swapchains := newVkSwapchainKHRSlice(*app.swapchain)
+	imageIndices := newCUint32Slice(imageIndex)
+	presentInfo := C.VkPresentInfoKHR{
+		sType:              C.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		waitSemaphoreCount: C.uint(len(signalSemaphores)),
+		pWaitSemaphores:    &signalSemaphores[0],
+		swapchainCount:     C.uint(len(swapchains)),
+		pSwapchains:        &swapchains[0],
+		pImageIndices:      &imageIndices[0],
+		pResults:           nil, // optional
+	}
+	if result := C.vkQueuePresentKHR(*app.presentQueue, &presentInfo); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to queue image for presentation (result=%d)", result)
 	}
 	return nil
 }

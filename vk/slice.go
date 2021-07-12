@@ -4,6 +4,8 @@ package vk
 
 // #include <vulkan/vulkan.h>
 //
+// #include <stdlib.h>
+//
 // #include "malloc.h"
 import "C"
 
@@ -216,6 +218,52 @@ func newVkSubmitInfoSlice(elems ...C.VkSubmitInfo) []C.VkSubmitInfo {
 		Cap:  n,
 	}
 	dst := *(*[]C.VkSubmitInfo)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}
+
+func newVkSubpassDependencySlice(elems ...C.VkSubpassDependency) []C.VkSubpassDependency {
+	n := len(elems)
+	data := C.new_VkSubpassDependencys(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkSubpassDependency)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}
+
+func newVkSwapchainKHRSlice(elems ...C.VkSwapchainKHR) []C.VkSwapchainKHR {
+	n := len(elems)
+	data := C.new_VkSwapchainKHRs(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkSwapchainKHR)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}
+
+func newCUint32Slice(elems ...C.uint32_t) []C.uint32_t {
+	n := len(elems)
+	const sizeof_uint32_t = 4
+	data := C.calloc(C.size_t(n), sizeof_uint32_t)
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.uint32_t)(unsafe.Pointer(&sh))
 	for i := range elems {
 		dst[i] = elems[i]
 	}

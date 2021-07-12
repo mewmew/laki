@@ -129,4 +129,12 @@ package vk
 // VkSubmitInfo * new_VkSubmitInfos(size_t n) {
 //    return calloc(n, sizeof(VkSubmitInfo));
 // }
+//
+// VkSubpassDependency * new_VkSubpassDependencys(size_t n) {
+//    return calloc(n, sizeof(VkSubpassDependency));
+// }
+//
+// VkSwapchainKHR * new_VkSwapchainKHRs(size_t n) {
+//    return calloc(n, sizeof(VkSwapchainKHR));
+// }
 import "C"
