@@ -59,4 +59,8 @@ package vk
 // VkPipelineLayout * new_VkPipelineLayout() {
 //    return calloc(1, sizeof(VkPipelineLayout));
 // }
+//
+// VkRenderPass * new_VkRenderPass() {
+//    return calloc(1, sizeof(VkRenderPass));
+// }
 import "C"

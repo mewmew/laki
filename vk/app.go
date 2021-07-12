@@ -25,6 +25,8 @@ type App struct {
 	// Shaders.
 	vertexShaderModule   *C.VkShaderModule
 	fragmentShaderModule *C.VkShaderModule
+	// Render pass.
+	renderPass *C.VkRenderPass
 	// Uniform values.
 	pipelineLayout *C.VkPipelineLayout
 }

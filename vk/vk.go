@@ -117,6 +117,11 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.swapchainImgViews = swapchainImgViews
+	renderPass, err := initRenderPass(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.renderPass = renderPass
 	if err := initGraphicsPipeline(app); err != nil {
 		return errors.WithStack(err)
 	}
@@ -125,6 +130,7 @@ func InitVulkan(app *App) error {
 
 func CleanupVulkan(app *App) {
 	C.vkDestroyPipelineLayout(*app.device, *app.pipelineLayout, nil)
+	C.vkDestroyRenderPass(*app.device, *app.renderPass, nil)
 	C.vkDestroyShaderModule(*app.device, *app.fragmentShaderModule, nil)
 	C.vkDestroyShaderModule(*app.device, *app.vertexShaderModule, nil)
 	for i := range app.swapchainImgViews {
@@ -673,6 +679,57 @@ func initSwapchainImgViews(app *App) ([]C.VkImageView, error) {
 		}
 	}
 	return swapchainImgViews, nil
+}
+
+func initRenderPass(app *App) (*C.VkRenderPass, error) {
+	colorAttachment := C.VkAttachmentDescription{
+		format:         app.swapchainImageFormat,
+		samples:        C.VK_SAMPLE_COUNT_1_BIT,
+		loadOp:         C.VK_ATTACHMENT_LOAD_OP_CLEAR,
+		storeOp:        C.VK_ATTACHMENT_STORE_OP_STORE,
+		stencilLoadOp:  C.VK_ATTACHMENT_LOAD_OP_DONT_CARE,  // NOTE: change if using stencils
+		stencilStoreOp: C.VK_ATTACHMENT_STORE_OP_DONT_CARE, // NOTE: change if using stencils
+		initialLayout:  C.VK_IMAGE_LAYOUT_UNDEFINED,
+		finalLayout:    C.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+	}
+	colorAttachments := []C.VkAttachmentDescription{
+		colorAttachment,
+	}
+	colorAttachmentRef := C.VkAttachmentReference{
+		attachment: 0, // index of color attachment descriptor (we only have one).
+		layout:     C.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	}
+	colorAttachmentRefs := []C.VkAttachmentReference{
+		colorAttachmentRef,
+	}
+	subpass := C.VkSubpassDescription{
+		pipelineBindPoint:       C.VK_PIPELINE_BIND_POINT_GRAPHICS,
+		inputAttachmentCount:    0,   // optional
+		pInputAttachments:       nil, // optional
+		colorAttachmentCount:    C.uint(len(colorAttachmentRefs)),
+		pColorAttachments:       &colorAttachmentRefs[0],
+		pResolveAttachments:     nil, // optional
+		pDepthStencilAttachment: nil, // optional
+		preserveAttachmentCount: 0,   // optional
+		pPreserveAttachments:    nil, // optional
+	}
+	subpasses := []C.VkSubpassDescription{
+		subpass,
+	}
+	renderPassCreateInfo := C.VkRenderPassCreateInfo{
+		sType:           C.VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		attachmentCount: C.uint(len(colorAttachments)),
+		pAttachments:    &colorAttachments[0],
+		subpassCount:    C.uint(len(subpasses)),
+		pSubpasses:      &subpasses[0],
+		dependencyCount: 0,   // optional
+		pDependencies:   nil, // optional
+	}
+	renderPass := C.new_VkRenderPass()
+	if result := C.vkCreateRenderPass(*app.device, &renderPassCreateInfo, nil, renderPass); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create render pass (result=%d)", result)
+	}
+	return renderPass, nil
 }
 
 func initGraphicsPipeline(app *App) error {
