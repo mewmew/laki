@@ -161,3 +161,18 @@ func newVkImageViewSlice(elems ...C.VkImageView) []C.VkImageView {
 	}
 	return dst
 }
+
+func newVkCommandBufferSlice(elems ...C.VkCommandBuffer) []C.VkCommandBuffer {
+	n := len(elems)
+	data := C.new_VkCommandBuffers(C.size_t(n))
+	sh := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  n,
+		Cap:  n,
+	}
+	dst := *(*[]C.VkCommandBuffer)(unsafe.Pointer(&sh))
+	for i := range elems {
+		dst[i] = elems[i]
+	}
+	return dst
+}

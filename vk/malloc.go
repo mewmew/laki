@@ -64,6 +64,10 @@ package vk
 //    return calloc(1, sizeof(VkRenderPass));
 // }
 //
+// VkCommandPool * new_VkCommandPool() {
+//    return calloc(1, sizeof(VkCommandPool));
+// }
+//
 //
 //
 // VkPipeline * new_VkPipelines(size_t n) {
@@ -104,5 +108,9 @@ package vk
 //
 // VkImageView * new_VkImageViews(size_t n) {
 //    return calloc(n, sizeof(VkImageView));
+// }
+//
+// VkCommandBuffer * new_VkCommandBuffers(size_t n) {
+//    return calloc(n, sizeof(VkCommandBuffer));
 // }
 import "C"

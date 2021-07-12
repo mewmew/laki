@@ -18,6 +18,7 @@ extern VkSwapchainKHR * new_VkSwapchainKHR();
 extern VkShaderModule * new_VkShaderModule();
 extern VkPipelineLayout * new_VkPipelineLayout();
 extern VkRenderPass * new_VkRenderPass();
+extern VkCommandPool * new_VkCommandPool();
 
 extern VkPipeline * new_VkPipelines(size_t n);
 extern VkAttachmentDescription * new_VkAttachmentDescriptions(size_t n);
@@ -29,5 +30,6 @@ extern VkPipelineColorBlendAttachmentState * new_VkPipelineColorBlendAttachmentS
 extern VkGraphicsPipelineCreateInfo * new_VkGraphicsPipelineCreateInfos(size_t n);
 extern VkFramebuffer * new_VkFramebuffers(size_t n);
 extern VkImageView * new_VkImageViews(size_t n);
+extern VkCommandBuffer * new_VkCommandBuffers(size_t n);
 
 #endif // #ifndef __MALLOC_H__

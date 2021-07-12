@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Framebuffers
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Command_buffers
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -133,10 +133,21 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.swapchainFramebuffers = framebuffers
+	commandPool, err := initCommandPool(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.commandPool = commandPool
+	commandBuffers, err := initCommandBuffers(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainCommandBuffers = commandBuffers
 	return nil
 }
 
 func CleanupVulkan(app *App) {
+	C.vkDestroyCommandPool(*app.device, *app.commandPool, nil)
 	for i := range app.swapchainFramebuffers {
 		C.vkDestroyFramebuffer(*app.device, app.swapchainFramebuffers[i], nil)
 	}
@@ -182,7 +193,6 @@ func createInstance() (*C.VkInstance, error) {
 
 	createInfo := C.new_VkInstanceCreateInfo()
 	createInfo.sType = C.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
-	createInfo.flags = 0 // reserved.
 	createInfo.pApplicationInfo = &appInfo
 	createInfo.enabledExtensionCount = C.uint32_t(len(enabledInstanceExtensions))
 	createInfo.ppEnabledExtensionNames = getCStringSlice(enabledInstanceExtensions)
@@ -967,6 +977,32 @@ func initFramebuffers(app *App) ([]C.VkFramebuffer, error) {
 		}
 	}
 	return framebuffers, nil
+}
+
+func initCommandPool(app *App) (*C.VkCommandPool, error) {
+	commandPoolCreateInfo := C.VkCommandPoolCreateInfo{
+		sType:            C.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		queueFamilyIndex: C.uint(app.graphicsQueueFamilyIndex),
+	}
+	commandPool := C.new_VkCommandPool()
+	if result := C.vkCreateCommandPool(*app.device, &commandPoolCreateInfo, nil, commandPool); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create command pool (result=%d)", result)
+	}
+	return commandPool, nil
+}
+
+func initCommandBuffers(app *App) ([]C.VkCommandBuffer, error) {
+	commandBuffers := newVkCommandBufferSlice(make([]C.VkCommandBuffer, len(app.swapchainFramebuffers))...)
+	commandBufferAllocateInfo := C.VkCommandBufferAllocateInfo{
+		sType:              C.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		commandPool:        *app.commandPool,
+		level:              C.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		commandBufferCount: C.uint(len(commandBuffers)),
+	}
+	if result := C.vkAllocateCommandBuffers(*app.device, &commandBufferAllocateInfo, &commandBuffers[0]); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create command buffers (result=%d)", result)
+	}
+	return commandBuffers, nil
 }
 
 // ### [ Helper functions ] ####################################################

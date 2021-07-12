@@ -16,13 +16,14 @@ type App struct {
 	presentQueue   *C.VkQueue
 	surface        *C.VkSurfaceKHR
 	*QueueFamilyIndices
-	swapchainSupportInfo  *SwapchainSupportInfo
-	swapchain             *C.VkSwapchainKHR
-	swapchainImageFormat  C.VkFormat
-	swapchainExtent       C.VkExtent2D
-	swapchainImgs         []C.VkImage
-	swapchainImgViews     []C.VkImageView
-	swapchainFramebuffers []C.VkFramebuffer
+	swapchainSupportInfo    *SwapchainSupportInfo
+	swapchain               *C.VkSwapchainKHR
+	swapchainImageFormat    C.VkFormat
+	swapchainExtent         C.VkExtent2D
+	swapchainImgs           []C.VkImage
+	swapchainImgViews       []C.VkImageView
+	swapchainFramebuffers   []C.VkFramebuffer
+	swapchainCommandBuffers []C.VkCommandBuffer
 	// Shaders.
 	vertexShaderModule   *C.VkShaderModule
 	fragmentShaderModule *C.VkShaderModule
@@ -32,6 +33,8 @@ type App struct {
 	pipelineLayout *C.VkPipelineLayout
 	// Graphics pipelines.
 	graphicsPipelines []C.VkPipeline
+
+	commandPool *C.VkCommandPool
 }
 
 func newApp() *App {
