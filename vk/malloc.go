@@ -72,6 +72,10 @@ package vk
 //    return calloc(1, sizeof(VkSemaphore));
 // }
 //
+// VkFence * new_VkFence() {
+//    return calloc(1, sizeof(VkFence));
+// }
+//
 //
 //
 // VkPipeline * new_VkPipelines(size_t n) {

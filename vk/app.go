@@ -36,8 +36,11 @@ type App struct {
 
 	commandPool *C.VkCommandPool
 
-	imageAvailableSemaphore *C.VkSemaphore // image aquired, ready for rendering
-	renderFinishedSemaphore *C.VkSemaphore // rendering finished, ready for presentation
+	imageAvailableSemaphores [MaxFramesInFlight]*C.VkSemaphore // image aquired, ready for rendering
+	renderFinishedSemaphores [MaxFramesInFlight]*C.VkSemaphore // rendering finished, ready for presentation
+	framesInFlightFences     [MaxFramesInFlight]*C.VkFence     // fence for frame in flight
+	imagesInFlightFences     []*C.VkFence                      // fence for each image in swap chain
+	curFrame                 int                               // in range [0, MaxFramesInFlight)
 }
 
 func newApp() *App {

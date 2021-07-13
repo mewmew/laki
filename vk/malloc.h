@@ -20,6 +20,7 @@ extern VkPipelineLayout * new_VkPipelineLayout();
 extern VkRenderPass * new_VkRenderPass();
 extern VkCommandPool * new_VkCommandPool();
 extern VkSemaphore * new_VkSemaphore();
+extern VkFence * new_VkFence();
 
 extern VkPipeline * new_VkPipelines(size_t n);
 extern VkAttachmentDescription * new_VkAttachmentDescriptions(size_t n);

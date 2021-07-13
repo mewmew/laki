@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation#page_Frames-in-flight
+// TODO: continue at https://vulkan-tutorial.com/en/Drawing_a_triangle/Swap_chain_recreation
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -152,15 +152,19 @@ func InitVulkan(app *App) error {
 	if err := recordRenderCommands(app); err != nil {
 		return errors.WithStack(err)
 	}
-	if err := initSemaphorse(app); err != nil {
+	if err := initSyncObjects(app); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil
 }
 
 func CleanupVulkan(app *App) {
-	C.vkDestroySemaphore(*app.device, *app.imageAvailableSemaphore, nil)
-	C.vkDestroySemaphore(*app.device, *app.renderFinishedSemaphore, nil)
+	for i := range app.imageAvailableSemaphores {
+		C.vkDestroyFence(*app.device, *app.imagesInFlightFences[i], nil)
+		C.vkDestroyFence(*app.device, *app.framesInFlightFences[i], nil)
+		C.vkDestroySemaphore(*app.device, *app.imageAvailableSemaphores[i], nil)
+		C.vkDestroySemaphore(*app.device, *app.renderFinishedSemaphores[i], nil)
+	}
 	C.vkDestroyCommandPool(*app.device, *app.commandPool, nil)
 	for i := range app.swapchainFramebuffers {
 		C.vkDestroyFramebuffer(*app.device, app.swapchainFramebuffers[i], nil)
@@ -1077,37 +1081,66 @@ func recordRenderCommands(app *App) error {
 	return nil
 }
 
-func initSemaphorse(app *App) error {
+func initSyncObjects(app *App) error {
 	semaphoreCreateInfo := C.VkSemaphoreCreateInfo{
 		sType: C.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 	}
-	// Image available semaphore.
-	imageAvailableSemaphore := C.new_VkSemaphore()
-	if result := C.vkCreateSemaphore(*app.device, &semaphoreCreateInfo, nil, imageAvailableSemaphore); result != C.VK_SUCCESS {
-		return errors.Errorf("unable to create semaphore (result=%d)", result)
+	fenceCreateInfo := C.VkFenceCreateInfo{
+		sType: C.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+		flags: C.VK_FENCE_CREATE_SIGNALED_BIT, // start fence in signalled state.
 	}
-	app.imageAvailableSemaphore = imageAvailableSemaphore
-	// Rendering finished semaphore.
-	renderFinishedSemaphore := C.new_VkSemaphore()
-	if result := C.vkCreateSemaphore(*app.device, &semaphoreCreateInfo, nil, renderFinishedSemaphore); result != C.VK_SUCCESS {
-		return errors.Errorf("unable to create semaphore (result=%d)", result)
+	app.imagesInFlightFences = make([]*C.VkFence, len(app.swapchainImgs))
+	for i := range app.imageAvailableSemaphores {
+		// Image available semaphore.
+		imageAvailableSemaphore := C.new_VkSemaphore()
+		if result := C.vkCreateSemaphore(*app.device, &semaphoreCreateInfo, nil, imageAvailableSemaphore); result != C.VK_SUCCESS {
+			return errors.Errorf("unable to create semaphore (result=%d)", result)
+		}
+		app.imageAvailableSemaphores[i] = imageAvailableSemaphore
+		// Rendering finished semaphore.
+		renderFinishedSemaphore := C.new_VkSemaphore()
+		if result := C.vkCreateSemaphore(*app.device, &semaphoreCreateInfo, nil, renderFinishedSemaphore); result != C.VK_SUCCESS {
+			return errors.Errorf("unable to create semaphore (result=%d)", result)
+		}
+		app.renderFinishedSemaphores[i] = renderFinishedSemaphore
+		// In-flight fence.
+		framesInFlightFence := C.new_VkFence()
+		if result := C.vkCreateFence(*app.device, &fenceCreateInfo, nil, framesInFlightFence); result != C.VK_SUCCESS {
+			return errors.Errorf("unable to create fence (result=%d)", result)
+		}
+		app.framesInFlightFences[i] = framesInFlightFence
+		// Images in-flight fence.
+		imagesInFlightFence := C.new_VkFence()
+		if result := C.vkCreateFence(*app.device, &fenceCreateInfo, nil, imagesInFlightFence); result != C.VK_SUCCESS {
+			return errors.Errorf("unable to create fence (result=%d)", result)
+		}
+		app.imagesInFlightFences[i] = imagesInFlightFence
 	}
-	app.renderFinishedSemaphore = renderFinishedSemaphore
 	return nil
 }
 
 func drawFrame(app *App) error {
+	const (
+		nfences = 1
+		timeout = C.UINT64_MAX // disable timeout
+	)
+	C.vkWaitForFences(*app.device, nfences, app.framesInFlightFences[app.curFrame], C.VK_TRUE, timeout)
+
 	//dbg.Println("vk.drawFrame")
-	const timeout = C.UINT64_MAX // disable timeout
-	var imageIndex C.uint32_t    // swapchainImgs array index
-	if result := C.vkAcquireNextImageKHR(*app.device, *app.swapchain, timeout, *app.imageAvailableSemaphore, nil, &imageIndex); result != C.VK_SUCCESS {
+	var imageIndex C.uint32_t // swapchainImgs array index
+	if result := C.vkAcquireNextImageKHR(*app.device, *app.swapchain, timeout, *app.imageAvailableSemaphores[app.curFrame], nil, &imageIndex); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to aquire next image (result=%d)", result)
 	}
-	waitSemaphores := newVkSemaphoreSlice(*app.imageAvailableSemaphore)
+	// check if frame is used by previous frame.
+	if app.imagesInFlightFences[imageIndex] != nil {
+		C.vkWaitForFences(*app.device, nfences, app.imagesInFlightFences[imageIndex], C.VK_TRUE, timeout)
+	}
+
+	waitSemaphores := newVkSemaphoreSlice(*app.imageAvailableSemaphores[app.curFrame])
 	waitStages := []C.VkPipelineStageFlags{
 		C.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 	}
-	signalSemaphores := newVkSemaphoreSlice(*app.renderFinishedSemaphore)
+	signalSemaphores := newVkSemaphoreSlice(*app.renderFinishedSemaphores[app.curFrame])
 	submitInfo := C.VkSubmitInfo{
 		sType:                C.VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		waitSemaphoreCount:   C.uint(len(waitSemaphores)),
@@ -1119,7 +1152,8 @@ func drawFrame(app *App) error {
 		pSignalSemaphores:    &signalSemaphores[0],
 	}
 	submits := newVkSubmitInfoSlice(submitInfo)
-	if result := C.vkQueueSubmit(*app.graphicsQueue, C.uint(len(submits)), &submits[0], nil); result != C.VK_SUCCESS {
+	C.vkResetFences(*app.device, nfences, app.framesInFlightFences[app.curFrame])
+	if result := C.vkQueueSubmit(*app.graphicsQueue, C.uint(len(submits)), &submits[0], *app.framesInFlightFences[app.curFrame]); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to submit command buffers to graphics queue (result=%d)", result)
 	}
 	// Present frame.
@@ -1138,9 +1172,7 @@ func drawFrame(app *App) error {
 		return errors.Errorf("unable to queue image for presentation (result=%d)", result)
 	}
 
-	if result := C.vkQueueWaitIdle(*app.presentQueue); result != C.VK_SUCCESS {
-		warn.Printf("unable to wait for present queue to become idle (result=%d)", result)
-	}
+	app.curFrame = (app.curFrame + 1) % MaxFramesInFlight
 
 	return nil
 }
