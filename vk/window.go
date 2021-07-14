@@ -9,7 +9,7 @@ func InitWindow() *C.GLFWwindow {
 	// Initialize GLFW.
 	C.glfwInit()
 	C.glfwWindowHint(C.GLFW_CLIENT_API, C.GLFW_NO_API) // skip OpenGL context.
-	C.glfwWindowHint(C.GLFW_RESIZABLE, C.GLFW_FALSE)
+	//C.glfwWindowHint(C.GLFW_RESIZABLE, C.GLFW_FALSE)
 	// Create window.
 	win := C.glfwCreateWindow(WindowWidth, WindowHeight, C.CString(AppTitle), nil, nil)
 	return win

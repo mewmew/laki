@@ -24,9 +24,6 @@ type App struct {
 	swapchainImgViews       []C.VkImageView
 	swapchainFramebuffers   []C.VkFramebuffer
 	swapchainCommandBuffers []C.VkCommandBuffer
-	// Shaders.
-	vertexShaderModule   *C.VkShaderModule
-	fragmentShaderModule *C.VkShaderModule
 	// Render pass.
 	renderPass *C.VkRenderPass
 	// Uniform values.

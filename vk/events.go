@@ -19,7 +19,7 @@ func EventLoop(app *App) {
 
 		// Render frame.
 		if err := drawFrame(app); err != nil {
-			warn.Println("%+v", err) // print warning and continue
+			warn.Printf("%+v", err) // print warning and continue
 		}
 		if time.Since(now) >= time.Second {
 			now = time.Now()

@@ -101,9 +101,6 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.physicalDevice = physicalDevice
-	swapchainSupportInfo := getSwapchainSupportInfo(app, physicalDevice)
-	app.swapchainSupportInfo = swapchainSupportInfo
-	pretty.Println("   swapchainSupportInfo:", swapchainSupportInfo)
 	device, err := initDevice(app)
 	if err != nil {
 		return errors.WithStack(err)
@@ -115,9 +112,6 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 
-	if err := recordRenderCommands(app); err != nil {
-		return errors.WithStack(err)
-	}
 	if err := initSyncObjects(app); err != nil {
 		return errors.WithStack(err)
 	}
@@ -131,26 +125,50 @@ func CleanupVulkan(app *App) {
 		C.vkDestroySemaphore(*app.device, *app.imageAvailableSemaphores[i], nil)
 		C.vkDestroySemaphore(*app.device, *app.renderFinishedSemaphores[i], nil)
 	}
+	cleanupSwapchain(app)
 	C.vkDestroyCommandPool(*app.device, *app.commandPool, nil)
-	for i := range app.swapchainFramebuffers {
-		C.vkDestroyFramebuffer(*app.device, app.swapchainFramebuffers[i], nil)
-	}
-	for _, graphicsPipeline := range app.graphicsPipelines {
-		C.vkDestroyPipeline(*app.device, graphicsPipeline, nil)
-	}
-	C.vkDestroyPipelineLayout(*app.device, *app.pipelineLayout, nil)
-	C.vkDestroyRenderPass(*app.device, *app.renderPass, nil)
-	C.vkDestroyShaderModule(*app.device, *app.fragmentShaderModule, nil)
-	C.vkDestroyShaderModule(*app.device, *app.vertexShaderModule, nil)
-	for i := range app.swapchainImgViews {
-		C.vkDestroyImageView(*app.device, app.swapchainImgViews[i], nil)
-	}
-	C.vkDestroySwapchainKHR(*app.device, *app.swapchain, nil)
-	C.vkDestroyDevice(*app.device, nil)
+	C.vkDestroyDevice(*app.device, nil) // free command pool after command buffers allocated in pool.
 	app.physicalDevice = nil
 	DestroyDebugUtilsMessengerEXT(*app.instance, *app.debugMessanger, nil)
 	C.vkDestroySurfaceKHR(*app.instance, *app.surface, nil)
 	C.vkDestroyInstance(*app.instance, nil)
+}
+
+func cleanupSwapchain(app *App) {
+	for i := range app.swapchainFramebuffers {
+		if app.swapchainFramebuffers[i] != nil {
+			C.vkDestroyFramebuffer(*app.device, app.swapchainFramebuffers[i], nil)
+			app.swapchainFramebuffers[i] = nil
+		}
+	}
+	if len(app.swapchainCommandBuffers) > 0 {
+		C.vkFreeCommandBuffers(*app.device, *app.commandPool, C.uint(len(app.swapchainCommandBuffers)), &app.swapchainCommandBuffers[0])
+		app.swapchainCommandBuffers = nil
+	}
+	if len(app.graphicsPipelines) > 0 {
+		for _, graphicsPipeline := range app.graphicsPipelines {
+			C.vkDestroyPipeline(*app.device, graphicsPipeline, nil)
+		}
+		app.graphicsPipelines = nil
+	}
+	if app.pipelineLayout != nil {
+		C.vkDestroyPipelineLayout(*app.device, *app.pipelineLayout, nil)
+		app.pipelineLayout = nil
+	}
+	if app.renderPass != nil {
+		C.vkDestroyRenderPass(*app.device, *app.renderPass, nil)
+		app.renderPass = nil
+	}
+	if len(app.swapchainImgViews) > 0 {
+		for i := range app.swapchainImgViews {
+			C.vkDestroyImageView(*app.device, app.swapchainImgViews[i], nil)
+		}
+		app.swapchainImgViews = nil
+	}
+	if app.swapchain != nil {
+		C.vkDestroySwapchainKHR(*app.device, *app.swapchain, nil)
+		app.swapchain = nil
+	}
 }
 
 func createInstance() (*C.VkInstance, error) {
@@ -400,7 +418,7 @@ func hasDeviceExtensionSupport(physicalDevice *C.VkPhysicalDevice) bool {
 		delete(m, deviceExtensionName)
 	}
 	if len(m) > 1 {
-		warn.Println("   missing required device extensions", m)
+		warn.Printf("   missing required device extensions: %#v", m)
 	}
 	return len(m) == 0
 }
@@ -570,9 +588,11 @@ func getSwapchainSupportInfo(app *App, physicalDevice *C.VkPhysicalDevice) *Swap
 }
 
 func chooseSwapExtent(app *App, surfaceCapabilities *C.VkSurfaceCapabilitiesKHR) C.VkExtent2D {
+	dbg.Println("vk.chooseSwapExtent")
 	if surfaceCapabilities.currentExtent.width == C.UINT32_MAX || surfaceCapabilities.currentExtent.height == C.UINT32_MAX {
 		var width, height C.int
 		C.glfwGetFramebufferSize(app.win, &width, &height)
+		dbg.Printf("   framebuffer size (%dx%d)", width, height)
 		actualExtent := C.VkExtent2D{
 			width:  C.uint(clamp(int(width), int(surfaceCapabilities.minImageExtent.width), int(surfaceCapabilities.maxImageExtent.width))),
 			height: C.uint(clamp(int(height), int(surfaceCapabilities.minImageExtent.height), int(surfaceCapabilities.maxImageExtent.height))),
@@ -601,6 +621,12 @@ func chooseSwapPresentMode(presentModes []C.VkPresentModeKHR) C.VkPresentModeKHR
 }
 
 func recreateSwapchain(app *App) error {
+	if result := C.vkDeviceWaitIdle(*app.device); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to wait for device to become idle (result=%d)", result)
+	}
+
+	cleanupSwapchain(app)
+
 	swapchain, err := initSwapchain(app)
 	if err != nil {
 		return errors.WithStack(err)
@@ -629,21 +655,34 @@ func recreateSwapchain(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.swapchainFramebuffers = framebuffers
-	commandPool, err := initCommandPool(app)
-	if err != nil {
-		return errors.WithStack(err)
+	// The command pool does not need to be re-initiated when re-initiating
+	// swapchains. Thus initiate it only once for the entire duration of the
+	// application.
+	if app.commandPool == nil {
+		commandPool, err := initCommandPool(app)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		app.commandPool = commandPool
 	}
-	app.commandPool = commandPool
 	commandBuffers, err := initCommandBuffers(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.swapchainCommandBuffers = commandBuffers
+	if err := recordRenderCommands(app); err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }
 
 func initSwapchain(app *App) (*C.VkSwapchainKHR, error) {
+	dbg.Println("vk.initSwapchain")
+	swapchainSupportInfo := getSwapchainSupportInfo(app, app.physicalDevice)
+	app.swapchainSupportInfo = swapchainSupportInfo
+	pretty.Println("   swapchainSupportInfo:", swapchainSupportInfo)
 	extent := chooseSwapExtent(app, app.swapchainSupportInfo.surfaceCapabilities)
+	dbg.Println("   extent:", extent)
 	surfaceFormat := chooseSwapSurfaceFormat(app.swapchainSupportInfo.surfaceFormats)
 	presentMode := chooseSwapPresentMode(app.swapchainSupportInfo.presentModes)
 	imageCount := app.swapchainSupportInfo.surfaceCapabilities.minImageCount
@@ -789,10 +828,11 @@ func initRenderPass(app *App) (*C.VkRenderPass, error) {
 }
 
 func initGraphicsPipeline(app *App) ([]C.VkPipeline, error) {
-	shaderStages, err := initShaderModules(app)
+	shaderStages, cleanupShaderModules, err := initShaderModules(app)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
+	defer cleanupShaderModules()
 
 	// Vertex input.
 	vertexInputState := C.VkPipelineVertexInputStateCreateInfo{
@@ -943,37 +983,39 @@ func initGraphicsPipeline(app *App) ([]C.VkPipeline, error) {
 	return graphicsPipelines, nil
 }
 
-func initShaderModules(app *App) ([]C.VkPipelineShaderStageCreateInfo, error) {
+func initShaderModules(app *App) (shaderStageCreateInfos []C.VkPipelineShaderStageCreateInfo, cleanup func(), err error) {
 	// Create vertex shader.
 	vertexShaderModule, err := createShaderModule(app, "shaders/shader_vert.spv")
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
-	app.vertexShaderModule = vertexShaderModule
 	// Create fragment shader.
 	fragmentShaderModule, err := createShaderModule(app, "shaders/shader_frag.spv")
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
-	app.fragmentShaderModule = fragmentShaderModule
 	// Create graphics pipeline.
 	vertexShaderStageInfo := C.VkPipelineShaderStageCreateInfo{
 		sType:  C.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		stage:  C.VK_SHADER_STAGE_VERTEX_BIT,
-		module: *app.vertexShaderModule,
+		module: *vertexShaderModule,
 		pName:  C.CString("main"),
 	}
 	fragmentShaderStageInfo := C.VkPipelineShaderStageCreateInfo{
 		sType:  C.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		stage:  C.VK_SHADER_STAGE_FRAGMENT_BIT,
-		module: *app.fragmentShaderModule,
+		module: *fragmentShaderModule,
 		pName:  C.CString("main"),
 	}
-	shaderStageCreateInfos := []C.VkPipelineShaderStageCreateInfo{
+	shaderStageCreateInfos = []C.VkPipelineShaderStageCreateInfo{
 		vertexShaderStageInfo,
 		fragmentShaderStageInfo,
 	}
-	return shaderStageCreateInfos, nil
+	cleanup = func() {
+		C.vkDestroyShaderModule(*app.device, *fragmentShaderModule, nil)
+		C.vkDestroyShaderModule(*app.device, *vertexShaderModule, nil)
+	}
+	return shaderStageCreateInfos, cleanup, nil
 }
 
 func createShaderModule(app *App, shaderPath string) (*C.VkShaderModule, error) {
@@ -1137,7 +1179,18 @@ func drawFrame(app *App) error {
 	//dbg.Println("vk.drawFrame")
 	var imageIndex C.uint32_t // swapchainImgs array index
 	if result := C.vkAcquireNextImageKHR(*app.device, *app.swapchain, timeout, *app.imageAvailableSemaphores[app.curFrame], nil, &imageIndex); result != C.VK_SUCCESS {
-		return errors.Errorf("unable to aquire next image (result=%d)", result)
+		switch result {
+		case C.VK_ERROR_OUT_OF_DATE_KHR:
+			// Recreate swapchain; window resolution has most likely been changed.
+			if err := recreateSwapchain(app); err != nil {
+				return errors.WithStack(err)
+			}
+			return nil // early return, try again on next call to drawFrame.
+		case C.VK_SUBOPTIMAL_KHR:
+			// nothing to do; present aquired image even if suboptimal.
+		default:
+			return errors.Errorf("unable to aquire next image (result=%d)", result)
+		}
 	}
 	// check if frame is used by previous frame.
 	if app.imagesInFlightFences[imageIndex] != nil {
@@ -1177,7 +1230,15 @@ func drawFrame(app *App) error {
 		pResults:           nil, // optional
 	}
 	if result := C.vkQueuePresentKHR(*app.presentQueue, &presentInfo); result != C.VK_SUCCESS {
-		return errors.Errorf("unable to queue image for presentation (result=%d)", result)
+		switch result {
+		case C.VK_ERROR_OUT_OF_DATE_KHR, C.VK_SUBOPTIMAL_KHR:
+			// Recreate swapchain; window resolution has most likely been changed.
+			if err := recreateSwapchain(app); err != nil {
+				return errors.WithStack(err)
+			}
+		default:
+			return errors.Errorf("unable to queue image for presentation (result=%d)", result)
+		}
 	}
 
 	app.curFrame = (app.curFrame + 1) % MaxFramesInFlight
