@@ -9,7 +9,7 @@
 ## Configure environment
 
 ```bash
-set VULKAN_DIR=C:\VulkanSDK\1.2.170.0
+set VULKAN_DIR=C:\VulkanSDK\1.2.182.0
 set GLFW_DIR=C:\libs\glfw-3.3.4.bin.WIN64
 set CGO_CFLAGS=-I %VULKAN_DIR%\Include -I %GLFW_DIR%\include
 set CGO_LDFLAGS=-L %VULKAN_DIR%\Lib -L %GLFW_DIR%\lib-mingw-w64
