@@ -621,6 +621,16 @@ func chooseSwapPresentMode(presentModes []C.VkPresentModeKHR) C.VkPresentModeKHR
 }
 
 func recreateSwapchain(app *App) error {
+	var width, height C.int
+	for {
+		C.glfwGetFramebufferSize(app.win, &width, &height)
+		minimized := width == 0 || height == 0
+		if !minimized {
+			break
+		}
+		C.glfwWaitEvents() // wait until window is not minimized.
+	}
+
 	if result := C.vkDeviceWaitIdle(*app.device); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to wait for device to become idle (result=%d)", result)
 	}
