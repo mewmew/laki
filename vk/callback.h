@@ -9,4 +9,6 @@ extern VkBool32 debugCallback(
 	const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
 	void *pUserData);
 
+extern void framebufferResizeCallback(GLFWwindow *win, int width, int height);
+
 #endif // #ifndef __CALLBACK_H__

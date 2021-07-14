@@ -69,7 +69,7 @@ const MaxFramesInFlight = 2
 
 func Init() error {
 	app := newApp()
-	app.win = InitWindow()
+	app.win = InitWindow(app)
 	defer CleanupWindow(app.win)
 	if err := InitVulkan(app); err != nil {
 		return errors.WithStack(err)
@@ -1229,14 +1229,16 @@ func drawFrame(app *App) error {
 		pImageIndices:      &imageIndices[0],
 		pResults:           nil, // optional
 	}
-	if result := C.vkQueuePresentKHR(*app.presentQueue, &presentInfo); result != C.VK_SUCCESS {
-		switch result {
-		case C.VK_ERROR_OUT_OF_DATE_KHR, C.VK_SUBOPTIMAL_KHR:
-			// Recreate swapchain; window resolution has most likely been changed.
-			if err := recreateSwapchain(app); err != nil {
-				return errors.WithStack(err)
-			}
-		default:
+	result := C.vkQueuePresentKHR(*app.presentQueue, &presentInfo)
+	switch {
+	case result == C.VK_ERROR_OUT_OF_DATE_KHR, result == C.VK_SUBOPTIMAL_KHR, app.framebufferResized:
+		// Recreate swapchain; window resolution has most likely been changed.
+		if err := recreateSwapchain(app); err != nil {
+			return errors.WithStack(err)
+		}
+		app.framebufferResized = false
+	default:
+		if result != C.VK_SUCCESS {
 			return errors.Errorf("unable to queue image for presentation (result=%d)", result)
 		}
 	}

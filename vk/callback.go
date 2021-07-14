@@ -1,6 +1,7 @@
 package vk
 
-// #include <vulkan/vulkan.h>
+// #define GLFW_INCLUDE_VULKAN
+// #include <GLFW/glfw3.h>
 import "C"
 
 import (
@@ -37,3 +38,12 @@ func debugCallback(messageSeverity C.VkDebugUtilsMessageSeverityFlagBitsEXT, mes
 	}
 	return C.VK_FALSE
 }
+
+//export framebufferResizeCallback
+func framebufferResizeCallback(win *C.GLFWwindow, width, height C.int) {
+	if _framebufferResizeCallback != nil {
+		_framebufferResizeCallback(win, int(width), int(height))
+	}
+}
+
+var _framebufferResizeCallback func(win *C.GLFWwindow, width, height int)

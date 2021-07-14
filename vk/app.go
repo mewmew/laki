@@ -38,6 +38,8 @@ type App struct {
 	framesInFlightFences     [MaxFramesInFlight]*C.VkFence     // fence for frame in flight
 	imagesInFlightFences     []*C.VkFence                      // fence for each image in swap chain
 	curFrame                 int                               // in range [0, MaxFramesInFlight)
+
+	framebufferResized bool
 }
 
 func newApp() *App {
