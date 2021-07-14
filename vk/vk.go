@@ -111,44 +111,10 @@ func InitVulkan(app *App) error {
 	app.device = device
 	initQueues(app)
 	pretty.Println("app.QueueFamilyIndices:", app.QueueFamilyIndices)
-	swapchain, err := initSwapchain(app)
-	if err != nil {
+	if err := recreateSwapchain(app); err != nil {
 		return errors.WithStack(err)
 	}
-	app.swapchain = swapchain
-	pretty.Println("   swapchain:", swapchain)
-	app.swapchainImgs = getSwapchainImgs(app)
-	swapchainImgViews, err := initSwapchainImgViews(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	app.swapchainImgViews = swapchainImgViews
-	renderPass, err := initRenderPass(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	app.renderPass = renderPass
-	graphicsPipelines, err := initGraphicsPipeline(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	app.graphicsPipelines = graphicsPipelines
-	pretty.Println("   graphicsPipelines:", graphicsPipelines)
-	framebuffers, err := initFramebuffers(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	app.swapchainFramebuffers = framebuffers
-	commandPool, err := initCommandPool(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	app.commandPool = commandPool
-	commandBuffers, err := initCommandBuffers(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	app.swapchainCommandBuffers = commandBuffers
+
 	if err := recordRenderCommands(app); err != nil {
 		return errors.WithStack(err)
 	}
@@ -632,6 +598,48 @@ func chooseSwapPresentMode(presentModes []C.VkPresentModeKHR) C.VkPresentModeKHR
 		}
 	}
 	return C.VK_PRESENT_MODE_FIFO_KHR
+}
+
+func recreateSwapchain(app *App) error {
+	swapchain, err := initSwapchain(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchain = swapchain
+	pretty.Println("   swapchain:", swapchain)
+	app.swapchainImgs = getSwapchainImgs(app)
+	swapchainImgViews, err := initSwapchainImgViews(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainImgViews = swapchainImgViews
+	renderPass, err := initRenderPass(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.renderPass = renderPass
+	graphicsPipelines, err := initGraphicsPipeline(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.graphicsPipelines = graphicsPipelines
+	pretty.Println("   graphicsPipelines:", graphicsPipelines)
+	framebuffers, err := initFramebuffers(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainFramebuffers = framebuffers
+	commandPool, err := initCommandPool(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.commandPool = commandPool
+	commandBuffers, err := initCommandBuffers(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainCommandBuffers = commandBuffers
+	return nil
 }
 
 func initSwapchain(app *App) (*C.VkSwapchainKHR, error) {
