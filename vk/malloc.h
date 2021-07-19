@@ -21,6 +21,8 @@ extern VkRenderPass * new_VkRenderPass();
 extern VkCommandPool * new_VkCommandPool();
 extern VkSemaphore * new_VkSemaphore();
 extern VkFence * new_VkFence();
+extern VkBuffer * new_VkBuffer();
+extern VkDeviceMemory * new_VkDeviceMemory();
 
 extern VkPipeline * new_VkPipelines(size_t n);
 extern VkAttachmentDescription * new_VkAttachmentDescriptions(size_t n);

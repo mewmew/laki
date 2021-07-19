@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Vertex_buffers/Vertex_input_description
+// TODO: continue at https://vulkan-tutorial.com/en/Vertex_buffers/Staging_buffer
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -81,37 +81,118 @@ func Init() error {
 }
 
 func InitVulkan(app *App) error {
-	instance, err := createInstance()
+	// Create Vulkan instance.
+	instance, err := initInstance()
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.instance = instance
+	// Create debug messanger.
 	debugMessanger, err := initDebugMessanger(app.instance)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.debugMessanger = debugMessanger
+	// Create Vulkan surface.
 	surface, err := initSurface(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.surface = surface
+	// Create Vulkan physical device.
 	physicalDevice, err := initPhysicalDevice(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.physicalDevice = physicalDevice
+	// Create Vulkan logical device.
 	device, err := initDevice(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.device = device
+	// Init queue indices.
 	initQueues(app)
-	pretty.Println("app.QueueFamilyIndices:", app.QueueFamilyIndices)
-	if err := recreateSwapchain(app); err != nil {
+
+	// Create swapchain.
+	swapchain, err := initSwapchain(app)
+	if err != nil {
 		return errors.WithStack(err)
 	}
-
+	app.swapchain = swapchain
+	// Create swapchain images.
+	app.swapchainImgs = getSwapchainImgs(app)
+	// Create swapchain image views.
+	swapchainImgViews, err := initSwapchainImgViews(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainImgViews = swapchainImgViews
+	// Create render pass.
+	renderPass, err := initRenderPass(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.renderPass = renderPass
+	// Create graphics pipeline.
+	graphicsPipelines, err := initGraphicsPipeline(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.graphicsPipelines = graphicsPipelines
+	// Create framebuffers.
+	framebuffers, err := initFramebuffers(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainFramebuffers = framebuffers
+	// Create command pool.
+	//
+	// NOTE: command pool does not need to be re-initialized during
+	// recreateSwapchain.
+	commandPool, err := initCommandPool(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.commandPool = commandPool
+	// Create vertex buffer.
+	app.vertices = []Vertex{
+		{
+			pos:   vec2(0.0, -0.5),     // x, y
+			color: vec3(1.0, 0.0, 0.0), // red
+		},
+		{
+			pos:   vec2(0.5, 0.5),      // x, y
+			color: vec3(0.0, 1.0, 0.0), // green
+		},
+		{
+			pos:   vec2(-0.5, 0.5),     // x, y
+			color: vec3(0.0, 0.0, 1.0), // blue
+		},
+	}
+	vertexBuffer, err := initVertexBuffer(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.vertexBuffer = vertexBuffer
+	vertexBufferMem, err := allocateMemory(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.vertexBufferMem = vertexBufferMem
+	if err := fillVertexBuffer(app); err != nil {
+		return errors.WithStack(err)
+	}
+	// Create command buffers.
+	commandBuffers, err := initCommandBuffers(app)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.swapchainCommandBuffers = commandBuffers
+	if err := recordRenderCommands(app); err != nil {
+		return errors.WithStack(err)
+	}
+	// Sync objects.
 	if err := initSyncObjects(app); err != nil {
 		return errors.WithStack(err)
 	}
@@ -125,6 +206,8 @@ func CleanupVulkan(app *App) {
 		C.vkDestroySemaphore(*app.device, *app.imageAvailableSemaphores[i], nil)
 		C.vkDestroySemaphore(*app.device, *app.renderFinishedSemaphores[i], nil)
 	}
+	C.vkFreeMemory(*app.device, *app.vertexBufferMem, nil)
+	C.vkDestroyBuffer(*app.device, *app.vertexBuffer, nil)
 	cleanupSwapchain(app)
 	C.vkDestroyCommandPool(*app.device, *app.commandPool, nil)
 	C.vkDestroyDevice(*app.device, nil) // free command pool after command buffers allocated in pool.
@@ -171,7 +254,7 @@ func cleanupSwapchain(app *App) {
 	}
 }
 
-func createInstance() (*C.VkInstance, error) {
+func initInstance() (*C.VkInstance, error) {
 	appInfo := C.VkApplicationInfo{
 		sType:              C.VK_STRUCTURE_TYPE_APPLICATION_INFO,
 		pApplicationName:   C.CString(AppTitle),
@@ -637,44 +720,39 @@ func recreateSwapchain(app *App) error {
 
 	cleanupSwapchain(app)
 
+	// Create swapchain.
 	swapchain, err := initSwapchain(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.swapchain = swapchain
-	pretty.Println("   swapchain:", swapchain)
+	// Create swapchain images.
 	app.swapchainImgs = getSwapchainImgs(app)
+	// Create swapchain image views.
 	swapchainImgViews, err := initSwapchainImgViews(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.swapchainImgViews = swapchainImgViews
+	// Create render pass.
 	renderPass, err := initRenderPass(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.renderPass = renderPass
+	// Create graphics pipeline.
 	graphicsPipelines, err := initGraphicsPipeline(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.graphicsPipelines = graphicsPipelines
-	pretty.Println("   graphicsPipelines:", graphicsPipelines)
+	// Create framebuffers.
 	framebuffers, err := initFramebuffers(app)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.swapchainFramebuffers = framebuffers
-	// The command pool does not need to be re-initiated when re-initiating
-	// swapchains. Thus initiate it only once for the entire duration of the
-	// application.
-	if app.commandPool == nil {
-		commandPool, err := initCommandPool(app)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		app.commandPool = commandPool
-	}
+	// Create command buffers.
 	commandBuffers, err := initCommandBuffers(app)
 	if err != nil {
 		return errors.WithStack(err)
@@ -845,12 +923,13 @@ func initGraphicsPipeline(app *App) ([]C.VkPipeline, error) {
 	defer cleanupShaderModules()
 
 	// Vertex input.
+	bindingDescs, attrDescs := getBindingDescs()
 	vertexInputState := C.VkPipelineVertexInputStateCreateInfo{
 		sType:                           C.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		vertexBindingDescriptionCount:   0,
-		pVertexBindingDescriptions:      nil,
-		vertexAttributeDescriptionCount: 0,
-		pVertexAttributeDescriptions:    nil,
+		vertexBindingDescriptionCount:   C.uint(len(bindingDescs)),
+		pVertexBindingDescriptions:      &bindingDescs[0],
+		vertexAttributeDescriptionCount: C.uint(len(attrDescs)),
+		pVertexAttributeDescriptions:    &attrDescs[0],
 	}
 
 	// Input assembler    (fixed-function stage)
@@ -1124,13 +1203,23 @@ func recordRenderCommands(app *App) error {
 
 		C.vkCmdBindPipeline(app.swapchainCommandBuffers[i], C.VK_PIPELINE_BIND_POINT_GRAPHICS, app.graphicsPipelines[0]) // NOTE: we only use one graphics pipeline.
 
+		vertexBuffers := []C.VkBuffer{
+			*app.vertexBuffer,
+		}
+		offsets := []C.VkDeviceSize{
+			0,
+		}
+		const firstBinding = 0
+		nbindings := C.uint(len(vertexBuffers))
+		C.vkCmdBindVertexBuffers(app.swapchainCommandBuffers[i], firstBinding, nbindings, &vertexBuffers[0], &offsets[0])
+
+		nvertices := C.uint(len(app.vertices))
 		const (
-			vertexCount   = 3
 			instanceCount = 1
 			firstVertex   = 0
 			firstInstance = 0
 		)
-		C.vkCmdDraw(app.swapchainCommandBuffers[i], vertexCount, instanceCount, firstVertex, firstInstance)
+		C.vkCmdDraw(app.swapchainCommandBuffers[i], nvertices, instanceCount, firstVertex, firstInstance)
 
 		C.vkCmdEndRenderPass(app.swapchainCommandBuffers[i])
 
@@ -1256,6 +1345,78 @@ func drawFrame(app *App) error {
 	app.curFrame = (app.curFrame + 1) % MaxFramesInFlight
 
 	return nil
+}
+
+func getVerticiesSize(app *App) int {
+	return int(unsafe.Sizeof(app.vertices[0])) * len(app.vertices)
+}
+
+func initVertexBuffer(app *App) (*C.VkBuffer, error) {
+	bufferCreateInfo := C.VkBufferCreateInfo{
+		sType:                 C.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		size:                  C.ulong(getVerticiesSize(app)),
+		usage:                 C.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		sharingMode:           C.VK_SHARING_MODE_EXCLUSIVE,
+		queueFamilyIndexCount: 0,   // optional
+		pQueueFamilyIndices:   nil, // optional
+	}
+	vertexBuffer := C.new_VkBuffer()
+	if result := C.vkCreateBuffer(*app.device, &bufferCreateInfo, nil, vertexBuffer); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to create vertex buffer (result=%d)", result)
+	}
+	return vertexBuffer, nil
+}
+
+func allocateMemory(app *App) (*C.VkDeviceMemory, error) {
+	// Get memory requirements.
+	var memRequirements C.VkMemoryRequirements
+	C.vkGetBufferMemoryRequirements(*app.device, *app.vertexBuffer, &memRequirements)
+	// Allocate memory.
+	properties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | C.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+	memoryTypeIndex, err := findMemoryType(app, memRequirements.memoryTypeBits, properties)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	memAllocInfo := C.VkMemoryAllocateInfo{
+		sType:           C.VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		allocationSize:  memRequirements.size,
+		memoryTypeIndex: C.uint(memoryTypeIndex),
+	}
+	vertexBufferMem := C.new_VkDeviceMemory()
+	if result := C.vkAllocateMemory(*app.device, &memAllocInfo, nil, vertexBufferMem); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to allocate memory of size=%d (result=%d)", memRequirements.size, result)
+	}
+	const memoryOffset = 0
+	if result := C.vkBindBufferMemory(*app.device, *app.vertexBuffer, *vertexBufferMem, memoryOffset); result != C.VK_SUCCESS {
+		return nil, errors.Errorf("unable to bind memory of vertex buffer (result=%d)", result)
+	}
+	return vertexBufferMem, nil
+}
+
+func fillVertexBuffer(app *App) error {
+	// Fill vertex buffer with data.
+	const offset = 0
+	var data unsafe.Pointer
+	size := getVerticiesSize(app)
+	if result := C.vkMapMemory(*app.device, *app.vertexBufferMem, offset, C.ulong(size), 0, &data); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to map memory of vertex buffer with size=%d (result=%d)", size, result)
+	}
+	dst := unsafe.Slice((*byte)(data), size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&app.vertices[0])), size)
+	copy(dst, src)
+	C.vkUnmapMemory(*app.device, *app.vertexBufferMem)
+	return nil
+}
+
+func findMemoryType(app *App, typeFilter C.uint, properties C.VkMemoryPropertyFlags) (uint32, error) {
+	var memProperties C.VkPhysicalDeviceMemoryProperties
+	C.vkGetPhysicalDeviceMemoryProperties(*app.physicalDevice, &memProperties)
+	for i := 0; i < int(memProperties.memoryTypeCount); i++ {
+		if typeFilter&C.uint(1<<i) != 0 && memProperties.memoryTypes[i].propertyFlags&properties == properties {
+			return uint32(i), nil
+		}
+	}
+	return 0, errors.Errorf("unable to find suitable memory type for filter 0x%08X", uint32(typeFilter))
 }
 
 // ### [ Helper functions ] ####################################################

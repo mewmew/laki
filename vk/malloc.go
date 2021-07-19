@@ -76,6 +76,14 @@ package vk
 //    return calloc(1, sizeof(VkFence));
 // }
 //
+// VkBuffer * new_VkBuffer() {
+//    return calloc(1, sizeof(VkBuffer));
+// }
+//
+// VkDeviceMemory * new_VkDeviceMemory() {
+//    return calloc(1, sizeof(VkDeviceMemory));
+// }
+//
 //
 //
 // VkPipeline * new_VkPipelines(size_t n) {

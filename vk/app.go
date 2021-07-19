@@ -40,6 +40,11 @@ type App struct {
 	curFrame                 int                               // in range [0, MaxFramesInFlight)
 
 	framebufferResized bool
+
+	vertexBuffer    *C.VkBuffer
+	vertexBufferMem *C.VkDeviceMemory
+
+	vertices []Vertex
 }
 
 func newApp() *App {
