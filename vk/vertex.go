@@ -10,6 +10,28 @@ type Vertex struct {
 	color Vec3
 }
 
+// Less reports whether vertex a is less than vertex b, comparing each element
+// of the struct depth first.
+func (a Vertex) Less(b Vertex) bool {
+	for i := range a.pos {
+		switch {
+		case a.pos[i] < b.pos[i]:
+			return true
+		case a.pos[i] > b.pos[i]:
+			return false
+		}
+	}
+	for i := range a.color {
+		switch {
+		case a.color[i] < b.color[i]:
+			return true
+		case a.color[i] > b.color[i]:
+			return false
+		}
+	}
+	return false
+}
+
 type Vec2 [2]float32
 
 func vec2(x, y float32) Vec2 {

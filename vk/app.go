@@ -44,7 +44,13 @@ type App struct {
 	vertexBuffer    *C.VkBuffer
 	vertexBufferMem *C.VkDeviceMemory
 
-	vertices []Vertex
+	indexBuffer    *C.VkBuffer
+	indexBufferMem *C.VkDeviceMemory
+
+	//vertices []Vertex
+	// only used for debugging.
+	indices        []uint32
+	uniqueVertices []Vertex
 }
 
 func newApp() *App {

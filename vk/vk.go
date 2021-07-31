@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/Vertex_buffers/Index_buffer
+// TODO: continue at https://vulkan-tutorial.com/en/Uniform_buffers/Descriptor_layout_and_buffer
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -155,47 +155,47 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.commandPool = commandPool
-	// Create vertex staging buffer.
-	app.vertices = []Vertex{
-		{
-			pos:   vec2(0.0, -0.5),     // x, y
-			color: vec3(1.0, 0.0, 0.0), // red
-		},
-		{
-			pos:   vec2(0.5, 0.5),      // x, y
-			color: vec3(0.0, 1.0, 0.0), // green
-		},
-		{
-			pos:   vec2(-0.5, 0.5),     // x, y
-			color: vec3(0.0, 0.0, 1.0), // blue
-		},
-	}
-	vertexBufferSize := getVerticiesSize(app.vertices)
-	stagingBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
-	stagingBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | C.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	stagingBuffer, stagingBufferMem, err := createBuffer(app, vertexBufferSize, stagingBufferUsage, stagingBufferProperties)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	if err := fillVertexBuffer(app, app.vertices, stagingBufferMem); err != nil {
-		return errors.WithStack(err)
-	}
 	// Create vertex buffer.
-	vertexBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_DST_BIT | C.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
-	vertexBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-	vertexBuffer, vertexBufferMem, err := createBuffer(app, vertexBufferSize, vertexBufferUsage, vertexBufferProperties)
-	if err != nil {
+	// top-left
+	topLeft := Vertex{
+		pos:   vec2(-0.5, -0.5),    // x, y
+		color: vec3(1.0, 0.0, 0.0), // red
+	}
+	// top-right
+	topRight := Vertex{
+		pos:   vec2(0.5, -0.5),     // x, y
+		color: vec3(0.0, 1.0, 0.0), // green
+	}
+	// bottom-right
+	bottomRight := Vertex{
+		pos:   vec2(0.5, 0.5),      // x, y
+		color: vec3(0.0, 0.0, 1.0), // blue
+	}
+	// bottom-left
+	bottomLeft := Vertex{
+		pos:   vec2(-0.5, 0.5),     // x, y
+		color: vec3(1.0, 1.0, 1.0), // white
+	}
+	vertices := []Vertex{
+		// first triangle.
+		topLeft,
+		topRight,
+		bottomRight,
+		// second triangle.
+		bottomRight,
+		bottomLeft,
+		topLeft,
+	}
+	indices, uniqueVertices := uniqueIndexList(vertices)
+	app.indices = indices
+	app.uniqueVertices = uniqueVertices
+	if err := createVertexBuffer(app, uniqueVertices); err != nil {
 		return errors.WithStack(err)
 	}
-	app.vertexBuffer = vertexBuffer
-	app.vertexBufferMem = vertexBufferMem
-	// Copy staging buffer to vertex buffer.
-	if err := copyBuffer(app, vertexBuffer, stagingBuffer, vertexBufferSize); err != nil {
+	// Create index buffer in GPU memory.
+	if err := createIndexBuffer(app, indices); err != nil {
 		return errors.WithStack(err)
 	}
-	// Free staging buffer.
-	C.vkFreeMemory(*app.device, *stagingBufferMem, nil)
-	C.vkDestroyBuffer(*app.device, *stagingBuffer, nil)
 	// Create command buffers.
 	commandBuffers, err := initCommandBuffers(app)
 	if err != nil {
@@ -219,6 +219,8 @@ func CleanupVulkan(app *App) {
 		C.vkDestroySemaphore(*app.device, *app.imageAvailableSemaphores[i], nil)
 		C.vkDestroySemaphore(*app.device, *app.renderFinishedSemaphores[i], nil)
 	}
+	C.vkFreeMemory(*app.device, *app.indexBufferMem, nil)
+	C.vkDestroyBuffer(*app.device, *app.indexBuffer, nil)
 	C.vkFreeMemory(*app.device, *app.vertexBufferMem, nil)
 	C.vkDestroyBuffer(*app.device, *app.vertexBuffer, nil)
 	cleanupSwapchain(app)
@@ -1222,17 +1224,18 @@ func recordRenderCommands(app *App) error {
 		offsets := []C.VkDeviceSize{
 			0,
 		}
-		const firstBinding = 0
-		nbindings := C.uint(len(vertexBuffers))
-		C.vkCmdBindVertexBuffers(app.swapchainCommandBuffers[i], firstBinding, nbindings, &vertexBuffers[0], &offsets[0])
+		const firstVertexBufferBinding = 0
+		C.vkCmdBindVertexBuffers(app.swapchainCommandBuffers[i], firstVertexBufferBinding, C.uint(len(vertexBuffers)), &vertexBuffers[0], &offsets[0])
+		const indexBufferOffset = 0
+		C.vkCmdBindIndexBuffer(app.swapchainCommandBuffers[i], *app.indexBuffer, indexBufferOffset, C.VK_INDEX_TYPE_UINT32)
 
-		nvertices := C.uint(len(app.vertices))
 		const (
 			instanceCount = 1
-			firstVertex   = 0
+			firstIndex    = 0
+			vertexOffset  = 0
 			firstInstance = 0
 		)
-		C.vkCmdDraw(app.swapchainCommandBuffers[i], nvertices, instanceCount, firstVertex, firstInstance)
+		C.vkCmdDrawIndexed(app.swapchainCommandBuffers[i], C.uint(len(app.indices)), instanceCount, firstIndex, vertexOffset, firstInstance)
 
 		C.vkCmdEndRenderPass(app.swapchainCommandBuffers[i])
 
@@ -1360,20 +1363,39 @@ func drawFrame(app *App) error {
 	return nil
 }
 
-func getVerticiesSize(vertices []Vertex) C.VkDeviceSize {
+func getVerticesSize(vertices []Vertex) C.VkDeviceSize {
 	return C.VkDeviceSize(int(unsafe.Sizeof(vertices[0])) * len(vertices))
+}
+
+func getIndicesSize(indices []uint32) C.VkDeviceSize {
+	return C.VkDeviceSize(int(unsafe.Sizeof(indices[0])) * len(indices))
 }
 
 func fillVertexBuffer(app *App, vertices []Vertex, bufferMem *C.VkDeviceMemory) error {
 	// Fill vertex buffer with data.
 	const offset = 0
 	var data unsafe.Pointer
-	size := getVerticiesSize(vertices)
+	size := getVerticesSize(vertices)
 	if result := C.vkMapMemory(*app.device, *bufferMem, offset, size, 0, &data); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to map memory of vertex buffer with size=%d (result=%d)", size, result)
 	}
 	dst := unsafe.Slice((*byte)(data), size)
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&vertices[0])), size)
+	copy(dst, src)
+	C.vkUnmapMemory(*app.device, *bufferMem)
+	return nil
+}
+
+func fillIndexBuffer(app *App, indices []uint32, bufferMem *C.VkDeviceMemory) error {
+	// Fill index buffer with data.
+	const offset = 0
+	var data unsafe.Pointer
+	size := getIndicesSize(indices)
+	if result := C.vkMapMemory(*app.device, *bufferMem, offset, size, 0, &data); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to map memory of index buffer with size=%d (result=%d)", size, result)
+	}
+	dst := unsafe.Slice((*byte)(data), size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&indices[0])), size)
 	copy(dst, src)
 	C.vkUnmapMemory(*app.device, *bufferMem)
 	return nil
@@ -1473,6 +1495,66 @@ func copyBuffer(app *App, dstBuffer, srcBuffer *C.VkBuffer, size C.VkDeviceSize)
 	return nil
 }
 
+func createVertexBuffer(app *App, uniqueVertices []Vertex) error {
+	// Create vertex staging buffer in CPU memory.
+	vertexBufferSize := getVerticesSize(uniqueVertices)
+	stagingBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
+	stagingBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | C.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+	stagingBuffer, stagingBufferMem, err := createBuffer(app, vertexBufferSize, stagingBufferUsage, stagingBufferProperties)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	defer C.vkDestroyBuffer(*app.device, *stagingBuffer, nil)
+	defer C.vkFreeMemory(*app.device, *stagingBufferMem, nil)
+	if err := fillVertexBuffer(app, uniqueVertices, stagingBufferMem); err != nil {
+		return errors.WithStack(err)
+	}
+	// Create vertex buffer in GPU memory.
+	vertexBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_DST_BIT | C.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+	vertexBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	vertexBuffer, vertexBufferMem, err := createBuffer(app, vertexBufferSize, vertexBufferUsage, vertexBufferProperties)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.vertexBuffer = vertexBuffer
+	app.vertexBufferMem = vertexBufferMem
+	// Copy staging buffer to vertex buffer.
+	if err := copyBuffer(app, vertexBuffer, stagingBuffer, vertexBufferSize); err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
+}
+
+func createIndexBuffer(app *App, indices []uint32) error {
+	// Create index staging buffer in CPU memory.
+	indexBufferSize := getIndicesSize(indices)
+	stagingBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
+	stagingBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | C.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+	stagingBuffer, stagingBufferMem, err := createBuffer(app, indexBufferSize, stagingBufferUsage, stagingBufferProperties)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	defer C.vkDestroyBuffer(*app.device, *stagingBuffer, nil)
+	defer C.vkFreeMemory(*app.device, *stagingBufferMem, nil)
+	if err := fillIndexBuffer(app, indices, stagingBufferMem); err != nil {
+		return errors.WithStack(err)
+	}
+	// Create index buffer in GPU memory.
+	indexBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_DST_BIT | C.VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+	indexBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	indexBuffer, indexBufferMem, err := createBuffer(app, indexBufferSize, indexBufferUsage, indexBufferProperties)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	app.indexBuffer = indexBuffer
+	app.indexBufferMem = indexBufferMem
+	// Copy staging buffer to index buffer.
+	if err := copyBuffer(app, indexBuffer, stagingBuffer, indexBufferSize); err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
+}
+
 // ### [ Helper functions ] ####################################################
 
 func contains(ss []string, s string) bool {
@@ -1506,4 +1588,31 @@ func clamp(v, min, max int) int {
 	}
 	// min <= v && v <= max
 	return v
+}
+
+// uniqueIndexList returns a list of indices into a list of unique vertices,
+// where uniqueVertices[indices[i]] == vertices[i] for each element.
+func uniqueIndexList(vertices []Vertex) ([]uint32, []Vertex) {
+	indices := make([]uint32, 0, len(vertices))
+	var uniqueVertices []Vertex
+	// maps from vertex to uniqueVertexIndex
+	uniqueVertexIndexFromVertex := make(map[Vertex]uint32)
+	for _, vertex := range vertices {
+		uniqueVertexIndexFromVertex[vertex] = 0 // placeholder value.
+	}
+	for uniqueVertex := range uniqueVertexIndexFromVertex {
+		uniqueVertices = append(uniqueVertices, uniqueVertex)
+	}
+	sort.Slice(uniqueVertices, func(i, j int) bool {
+		return uniqueVertices[i].Less(uniqueVertices[j])
+	})
+	for uniqueVertexIndex, uniqueVertex := range uniqueVertices {
+		uniqueVertexIndexFromVertex[uniqueVertex] = uint32(uniqueVertexIndex)
+	}
+	// Ensure vertices[i] ==
+	for _, vertex := range vertices {
+		uniqueVertexIndex := uniqueVertexIndexFromVertex[vertex]
+		indices = append(indices, uniqueVertexIndex)
+	}
+	return indices, uniqueVertices
 }
