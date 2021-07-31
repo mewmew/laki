@@ -1,4 +1,4 @@
-// TODO: continue at https://vulkan-tutorial.com/en/Vertex_buffers/Staging_buffer
+// TODO: continue at https://vulkan-tutorial.com/Vertex_buffers/Index_buffer
 
 // refs:
 // * Graphics pipeline overview: https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Introduction
@@ -155,7 +155,7 @@ func InitVulkan(app *App) error {
 		return errors.WithStack(err)
 	}
 	app.commandPool = commandPool
-	// Create vertex buffer.
+	// Create vertex staging buffer.
 	app.vertices = []Vertex{
 		{
 			pos:   vec2(0.0, -0.5),     // x, y
@@ -170,19 +170,32 @@ func InitVulkan(app *App) error {
 			color: vec3(0.0, 0.0, 1.0), // blue
 		},
 	}
-	vertexBuffer, err := initVertexBuffer(app)
+	vertexBufferSize := getVerticiesSize(app.vertices)
+	stagingBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
+	stagingBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | C.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+	stagingBuffer, stagingBufferMem, err := createBuffer(app, vertexBufferSize, stagingBufferUsage, stagingBufferProperties)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	if err := fillVertexBuffer(app, app.vertices, stagingBufferMem); err != nil {
+		return errors.WithStack(err)
+	}
+	// Create vertex buffer.
+	vertexBufferUsage := C.VkBufferUsageFlags(C.VK_BUFFER_USAGE_TRANSFER_DST_BIT | C.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+	vertexBufferProperties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	vertexBuffer, vertexBufferMem, err := createBuffer(app, vertexBufferSize, vertexBufferUsage, vertexBufferProperties)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	app.vertexBuffer = vertexBuffer
-	vertexBufferMem, err := allocateMemory(app)
-	if err != nil {
-		return errors.WithStack(err)
-	}
 	app.vertexBufferMem = vertexBufferMem
-	if err := fillVertexBuffer(app); err != nil {
+	// Copy staging buffer to vertex buffer.
+	if err := copyBuffer(app, vertexBuffer, stagingBuffer, vertexBufferSize); err != nil {
 		return errors.WithStack(err)
 	}
+	// Free staging buffer.
+	C.vkFreeMemory(*app.device, *stagingBufferMem, nil)
+	C.vkDestroyBuffer(*app.device, *stagingBuffer, nil)
 	// Create command buffers.
 	commandBuffers, err := initCommandBuffers(app)
 	if err != nil {
@@ -1347,64 +1360,22 @@ func drawFrame(app *App) error {
 	return nil
 }
 
-func getVerticiesSize(app *App) int {
-	return int(unsafe.Sizeof(app.vertices[0])) * len(app.vertices)
+func getVerticiesSize(vertices []Vertex) C.VkDeviceSize {
+	return C.VkDeviceSize(int(unsafe.Sizeof(vertices[0])) * len(vertices))
 }
 
-func initVertexBuffer(app *App) (*C.VkBuffer, error) {
-	bufferCreateInfo := C.VkBufferCreateInfo{
-		sType:                 C.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		size:                  C.ulong(getVerticiesSize(app)),
-		usage:                 C.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		sharingMode:           C.VK_SHARING_MODE_EXCLUSIVE,
-		queueFamilyIndexCount: 0,   // optional
-		pQueueFamilyIndices:   nil, // optional
-	}
-	vertexBuffer := C.new_VkBuffer()
-	if result := C.vkCreateBuffer(*app.device, &bufferCreateInfo, nil, vertexBuffer); result != C.VK_SUCCESS {
-		return nil, errors.Errorf("unable to create vertex buffer (result=%d)", result)
-	}
-	return vertexBuffer, nil
-}
-
-func allocateMemory(app *App) (*C.VkDeviceMemory, error) {
-	// Get memory requirements.
-	var memRequirements C.VkMemoryRequirements
-	C.vkGetBufferMemoryRequirements(*app.device, *app.vertexBuffer, &memRequirements)
-	// Allocate memory.
-	properties := C.VkMemoryPropertyFlags(C.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | C.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	memoryTypeIndex, err := findMemoryType(app, memRequirements.memoryTypeBits, properties)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	memAllocInfo := C.VkMemoryAllocateInfo{
-		sType:           C.VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		allocationSize:  memRequirements.size,
-		memoryTypeIndex: C.uint(memoryTypeIndex),
-	}
-	vertexBufferMem := C.new_VkDeviceMemory()
-	if result := C.vkAllocateMemory(*app.device, &memAllocInfo, nil, vertexBufferMem); result != C.VK_SUCCESS {
-		return nil, errors.Errorf("unable to allocate memory of size=%d (result=%d)", memRequirements.size, result)
-	}
-	const memoryOffset = 0
-	if result := C.vkBindBufferMemory(*app.device, *app.vertexBuffer, *vertexBufferMem, memoryOffset); result != C.VK_SUCCESS {
-		return nil, errors.Errorf("unable to bind memory of vertex buffer (result=%d)", result)
-	}
-	return vertexBufferMem, nil
-}
-
-func fillVertexBuffer(app *App) error {
+func fillVertexBuffer(app *App, vertices []Vertex, bufferMem *C.VkDeviceMemory) error {
 	// Fill vertex buffer with data.
 	const offset = 0
 	var data unsafe.Pointer
-	size := getVerticiesSize(app)
-	if result := C.vkMapMemory(*app.device, *app.vertexBufferMem, offset, C.ulong(size), 0, &data); result != C.VK_SUCCESS {
+	size := getVerticiesSize(vertices)
+	if result := C.vkMapMemory(*app.device, *bufferMem, offset, size, 0, &data); result != C.VK_SUCCESS {
 		return errors.Errorf("unable to map memory of vertex buffer with size=%d (result=%d)", size, result)
 	}
 	dst := unsafe.Slice((*byte)(data), size)
-	src := unsafe.Slice((*byte)(unsafe.Pointer(&app.vertices[0])), size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&vertices[0])), size)
 	copy(dst, src)
-	C.vkUnmapMemory(*app.device, *app.vertexBufferMem)
+	C.vkUnmapMemory(*app.device, *bufferMem)
 	return nil
 }
 
@@ -1417,6 +1388,89 @@ func findMemoryType(app *App, typeFilter C.uint, properties C.VkMemoryPropertyFl
 		}
 	}
 	return 0, errors.Errorf("unable to find suitable memory type for filter 0x%08X", uint32(typeFilter))
+}
+
+func createBuffer(app *App, size C.VkDeviceSize, usage C.VkBufferUsageFlags, properties C.VkMemoryPropertyFlags) (*C.VkBuffer, *C.VkDeviceMemory, error) {
+	bufferCreateInfo := C.VkBufferCreateInfo{
+		sType:                 C.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		size:                  size,
+		usage:                 usage,
+		sharingMode:           C.VK_SHARING_MODE_EXCLUSIVE,
+		queueFamilyIndexCount: 0,   // optional
+		pQueueFamilyIndices:   nil, // optional
+	}
+	buffer := C.new_VkBuffer()
+	if result := C.vkCreateBuffer(*app.device, &bufferCreateInfo, nil, buffer); result != C.VK_SUCCESS {
+		return nil, nil, errors.Errorf("unable to create vertex buffer (result=%d)", result)
+	}
+	// Get memory requirements.
+	var memRequirements C.VkMemoryRequirements
+	C.vkGetBufferMemoryRequirements(*app.device, *buffer, &memRequirements)
+	// Allocate memory.
+	memoryTypeIndex, err := findMemoryType(app, memRequirements.memoryTypeBits, properties)
+	if err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+	memAllocInfo := C.VkMemoryAllocateInfo{
+		sType:           C.VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		allocationSize:  memRequirements.size,
+		memoryTypeIndex: C.uint(memoryTypeIndex),
+	}
+	bufferMem := C.new_VkDeviceMemory()
+	if result := C.vkAllocateMemory(*app.device, &memAllocInfo, nil, bufferMem); result != C.VK_SUCCESS {
+		return nil, nil, errors.Errorf("unable to allocate memory of size=%d (result=%d)", memRequirements.size, result)
+	}
+	const memoryOffset = 0
+	if result := C.vkBindBufferMemory(*app.device, *buffer, *bufferMem, memoryOffset); result != C.VK_SUCCESS {
+		return nil, nil, errors.Errorf("unable to bind memory of vertex buffer (result=%d)", result)
+	}
+	return buffer, bufferMem, nil
+}
+
+func copyBuffer(app *App, dstBuffer, srcBuffer *C.VkBuffer, size C.VkDeviceSize) error {
+	tmpCommandBuffers := newVkCommandBufferSlice(make([]C.VkCommandBuffer, 1)...)
+	commandBufferAllocateInfo := C.VkCommandBufferAllocateInfo{
+		sType:              C.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		commandPool:        *app.commandPool,
+		level:              C.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		commandBufferCount: C.uint(len(tmpCommandBuffers)),
+	}
+	if result := C.vkAllocateCommandBuffers(*app.device, &commandBufferAllocateInfo, &tmpCommandBuffers[0]); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to create command buffers (result=%d)", result)
+	}
+	defer C.vkFreeCommandBuffers(*app.device, *app.commandPool, C.uint(len(tmpCommandBuffers)), &tmpCommandBuffers[0])
+	commandBufferBeginInfo := C.VkCommandBufferBeginInfo{
+		sType:            C.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		flags:            C.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		pInheritanceInfo: nil, // optional
+	}
+	if result := C.vkBeginCommandBuffer(tmpCommandBuffers[0], &commandBufferBeginInfo); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to begin recording command buffer (result=%d)", result)
+	}
+	copyRegions := []C.VkBufferCopy{
+		{
+			srcOffset: 0,
+			dstOffset: 0,
+			size:      size,
+		},
+	}
+	C.vkCmdCopyBuffer(tmpCommandBuffers[0], *srcBuffer, *dstBuffer, C.uint(len(copyRegions)), &copyRegions[0])
+	if result := C.vkEndCommandBuffer(tmpCommandBuffers[0]); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to record command buffer (result=%d)", result)
+	}
+	submitInfo := C.VkSubmitInfo{
+		sType:              C.VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		commandBufferCount: C.uint(len(tmpCommandBuffers)),
+		pCommandBuffers:    &tmpCommandBuffers[0],
+	}
+	submits := newVkSubmitInfoSlice(submitInfo)
+	if result := C.vkQueueSubmit(*app.graphicsQueue, C.uint(len(submits)), &submits[0], nil); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to submit command buffers to graphics queue (result=%d)", result)
+	}
+	if result := C.vkQueueWaitIdle(*app.graphicsQueue); result != C.VK_SUCCESS {
+		return errors.Errorf("unable to wait for graphics queue to become idle (result=%d)", result)
+	}
+	return nil
 }
 
 // ### [ Helper functions ] ####################################################
